@@ -52,17 +52,29 @@ win32: !simulator: {
   win32-g++: {
         LIBS += -luser32 -lgdi32
     }
-
 }
 
 linux-*: !simulator: {
     PRIVATE_HEADERS += linux/qdeviceinfo_linux_p.h \
-                       linux/qnetworkinfo_linux_p.h \
-                       linux/qscreensaver_linux_p.h
+                       linux/qnetworkinfo_linux_p.h
 
-    SOURCES += linux/qdeviceinfo_linux.cpp \
-               linux/qnetworkinfo_linux.cpp \
-               linux/qscreensaver_linux.cpp
+    SOURCES += \
+           qinputinfo.cpp \
+           linux/qdeviceinfo_linux.cpp \
+           linux/qnetworkinfo_linux.cpp \
+           linux/qinputinfomanager.cpp
+   HEADERS += \
+         qinputinfo.h \
+         linux/qinputinfomanager_p.h
+
+    config_mir {
+        DEFINES += QT_UNITY8
+        PRIVATE_HEADERS += linux/qscreensaver_mir_p.h
+        SOURCES += linux/qscreensaver_mir.cpp
+    } else {
+        PRIVATE_HEADERS += linux/qscreensaver_linux_p.h
+        SOURCES += linux/qscreensaver_linux.cpp
+    }
 
     x11|config_x11: !contains(CONFIG,nox11option) {
         CONFIG += link_pkgconfig
@@ -87,7 +99,7 @@ linux-*: !simulator: {
             DEFINES += QT_NO_OFONO
         }
 
-        config_udisks {
+        contains(CONFIG,udisks): {
             QT_PRIVATE += dbus
         } else: {
             DEFINES += QT_NO_UDISKS
@@ -109,19 +121,38 @@ linux-*: !simulator: {
             LIBS += -lssu
             DEFINES += QT_USE_SSU
         }
-
     } else {
         DEFINES += QT_NO_OFONO QT_NO_UDISKS QT_NO_UPOWER
         HEADERS += linux/qbatteryinfo_linux_p.h
         SOURCES += linux/qbatteryinfo_linux.cpp
     }
 
+    config_mir {
+        QT += gui gui-private
+        CONFIG += link_pkgconfig
+        PKGCONFIG += mirclient
+        LIBS += -lmirclient
+        SOURCES += linux/qinputinfomanagermir.cpp
+        PRIVATE_HEADERS += linux/qinputinfomanagermir_p.h
+    } else {
+        DEFINES += QT_NO_MIR
+    }
+
     config_udev {
         CONFIG += link_pkgconfig
         PKGCONFIG += udev
         LIBS += -ludev
-        PRIVATE_HEADERS += linux/qudevwrapper_p.h
-        SOURCES += linux/qudevwrapper.cpp
+
+        config_evdev {
+            PKGCONFIG += libevdev
+            LIBS +=  -levdev
+        } else {
+            DEFINES += QT_NO_EVDEV
+        }
+        PRIVATE_HEADERS += linux/qudevwrapper_p.h \
+            linux/qinputinfomanagerudev_p.h
+        SOURCES += linux/qudevwrapper.cpp \
+                   linux/qinputinfomanagerudev.cpp
     } else {
         DEFINES += QT_NO_UDEV
     }
@@ -210,12 +241,15 @@ simulator {
             DEFINES += QT_NO_OFONO QT_NO_UDISKS
         }
 
+        DEFINES += QT_NO_MIR
+
         config_udev {
             CONFIG += link_pkgconfig
             PKGCONFIG += udev
             LIBS += -ludev
             PRIVATE_HEADERS += linux/qudevwrapper_p.h
-            SOURCES += linux/qudevwrapper.cpp
+            SOURCES += linux/qudevwrapper.cpp \
+                       linux/qinputdeviceinfo_udev.cpp
         } else {
             DEFINES += QT_NO_UDEV
         }
@@ -241,4 +275,7 @@ config_bluez {
         QMAKE_CXXFLAGS += -std=gnu++0x
     }
 }
+
+OTHER_FILES += \
+    notes.txt
 

@@ -47,6 +47,7 @@
 
      * CONFIG+=upower (linux) will build the UPower dbus backend.
      * CONFIG+=ofono (linux) will build the Ofono dbus backend.
+     * CONFIG+=udisk (linux) will build the Udisk dbus backend.
      * CONFIG+=nox11option (linux) Turns off the use of x11 in QScreenSaver (and screen blanking
      disabling and enabling will not work)
 

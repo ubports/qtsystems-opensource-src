@@ -48,7 +48,7 @@
 #include "qbatteryinfo.h"
 #include "qdeviceinfo.h"
 #include "qnetworkinfo.h"
-//#include "qscreensaverinfo.h"
+#include "qinputinfo.h"
 
 
 #define X(expr) qDebug() << #expr << "->" << (expr);
@@ -299,6 +299,22 @@ static void test_batteryinfo(void)
     X(batInfo.health());
 }
 
+/* ------------------------------------------------------------------------- *
+ * test_systeminputdeviceinfo
+ * ------------------------------------------------------------------------- */
+
+static void test_inputinfo(void)
+{
+    QInputInfoManager manager;
+    QMap <QString, QInputDevice *> map = manager.deviceMap();
+    X(map.count());
+    QMapIterator<QString, QInputDevice *> i(map);
+    while (i.hasNext()) {
+        i.next();
+        X(i.value()->name());
+        X(i.value()->types());
+    }
+}
 
 struct dummy_t
 {
@@ -311,6 +327,7 @@ struct dummy_t
   ADD(networkinfo),
 //  ADD(screensaver),
   ADD(batteryinfo),
+  ADD(inputinfo),
 #undef ADD
   {0,0}
 };
