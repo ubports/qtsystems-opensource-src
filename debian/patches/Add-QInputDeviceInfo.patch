@@ -1,0 +1,2976 @@
+From fcda5453a1fac581ca0232f04ae264c30db24d59 Mon Sep 17 00:00:00 2001
+From: Lorn Potter <lorn.potter@canonical.com>
+Date: Sat, 29 Nov 2014 10:23:57 +1000
+Subject: [PATCH] Add QInputDeviceInfo
+
+Change-Id: Ia2743851a7843cb2f44a82cffd80ddd176b2c564
+Reviewed-by: Lorn Potter <lorn.potter@canonical.com>
+---
+ config.tests/evdev/evdev.pro                       |   7 +
+ config.tests/evdev/main.cpp                        |  39 ++
+ config.tests/mir/main.cpp                          |  42 ++
+ config.tests/mir/mir.pro                           |   8 +
+ examples/systeminfo/inputinfo/inputinfo.pro        |  26 ++
+ examples/systeminfo/inputinfo/inputtest.cpp        | 143 ++++++
+ examples/systeminfo/inputinfo/inputtest.h          |  62 +++
+ examples/systeminfo/inputinfo/main.cpp             |  43 ++
+ examples/systeminfo/qml-inputinfo/main.cpp         |  36 ++
+ .../systeminfo/qml-inputinfo/qml-inputinfo.pro     |  14 +
+ .../systeminfo/qml-inputinfo/qml-inputinfo.qml     | 118 +++++
+ .../systeminfo/qml-inputinfo/qml-inputinfo.qrc     |   5 +
+ examples/systeminfo/systeminfo.pro                 |   5 +
+ qtsystems.pro                                      |   2 +
+ src/imports/systeminfo/plugins.qmltypes            | 110 ++++-
+ .../systeminfo/qdeclarativeinputdevicemodel.cpp    | 204 +++++++++
+ .../systeminfo/qdeclarativeinputdevicemodel_p.h    | 101 +++++
+ src/imports/systeminfo/qdeclarativenetworkinfo.cpp |   1 +
+ src/imports/systeminfo/qsysteminfo.cpp             |  11 +
+ src/imports/systeminfo/systeminfo.pro              |   6 +
+ src/systeminfo/linux/qinputinfomanager.cpp         |  40 ++
+ src/systeminfo/linux/qinputinfomanager_p.h         |  74 ++++
+ src/systeminfo/linux/qinputinfomanagermir.cpp      | 129 ++++++
+ src/systeminfo/linux/qinputinfomanagermir_p.h      |  60 +++
+ src/systeminfo/linux/qinputinfomanagerudev.cpp     | 281 ++++++++++++
+ src/systeminfo/linux/qinputinfomanagerudev_p.h     |  70 +++
+ src/systeminfo/qbatteryinfo.h                      |   2 +-
+ src/systeminfo/qdeviceinfo.h                       |   2 +-
+ src/systeminfo/qinputinfo.cpp                      | 481 +++++++++++++++++++++
+ src/systeminfo/qinputinfo.h                        | 182 ++++++++
+ src/systeminfo/qnetworkinfo.h                      |   2 +-
+ src/systeminfo/qscreensaver.h                      |   2 +-
+ src/systeminfo/systeminfo.pro                      |  47 +-
+ .../qinputdeviceinfo/qinputdeviceinfo.pro          |   6 +
+ .../qinputdeviceinfo/tst_qinputdeviceinfo.cpp      | 143 ++++++
+ tests/auto/systeminfo/systeminfo.pro               |   5 +
+ tests/manual/sysinfo-tester/main.cpp               |  19 +-
+ tests/manual/sysinfo-tester/sysinfo-tester.pro     |   2 +-
+ tests/tests.pro                                    |   4 +-
+ 39 files changed, 2518 insertions(+), 16 deletions(-)
+ create mode 100644 config.tests/evdev/evdev.pro
+ create mode 100644 config.tests/evdev/main.cpp
+ create mode 100644 config.tests/mir/main.cpp
+ create mode 100644 config.tests/mir/mir.pro
+ create mode 100644 examples/systeminfo/inputinfo/inputinfo.pro
+ create mode 100644 examples/systeminfo/inputinfo/inputtest.cpp
+ create mode 100644 examples/systeminfo/inputinfo/inputtest.h
+ create mode 100644 examples/systeminfo/inputinfo/main.cpp
+ create mode 100644 examples/systeminfo/qml-inputinfo/main.cpp
+ create mode 100644 examples/systeminfo/qml-inputinfo/qml-inputinfo.pro
+ create mode 100644 examples/systeminfo/qml-inputinfo/qml-inputinfo.qml
+ create mode 100644 examples/systeminfo/qml-inputinfo/qml-inputinfo.qrc
+ create mode 100644 src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp
+ create mode 100644 src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h
+ create mode 100644 src/systeminfo/linux/qinputinfomanager.cpp
+ create mode 100644 src/systeminfo/linux/qinputinfomanager_p.h
+ create mode 100644 src/systeminfo/linux/qinputinfomanagermir.cpp
+ create mode 100644 src/systeminfo/linux/qinputinfomanagermir_p.h
+ create mode 100644 src/systeminfo/linux/qinputinfomanagerudev.cpp
+ create mode 100644 src/systeminfo/linux/qinputinfomanagerudev_p.h
+ create mode 100644 src/systeminfo/qinputinfo.cpp
+ create mode 100644 src/systeminfo/qinputinfo.h
+ create mode 100644 tests/auto/systeminfo/qinputdeviceinfo/qinputdeviceinfo.pro
+ create mode 100644 tests/auto/systeminfo/qinputdeviceinfo/tst_qinputdeviceinfo.cpp
+
+diff --git a/config.tests/evdev/evdev.pro b/config.tests/evdev/evdev.pro
+new file mode 100644
+index 0000000..1878e58
+--- /dev/null
++++ b/config.tests/evdev/evdev.pro
+@@ -0,0 +1,7 @@
++TEMPLATE = app
++
++CONFIG += link_pkgconfig
++PKGCONFIG += libevdev
++TARGET = evdev
++
++SOURCES += main.cpp
+diff --git a/config.tests/evdev/main.cpp b/config.tests/evdev/main.cpp
+new file mode 100644
+index 0000000..ee9b751
+--- /dev/null
++++ b/config.tests/evdev/main.cpp
+@@ -0,0 +1,39 @@
++/****************************************************************************
++**
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include <libevdev/libevdev.h>
++
++int main()
++{
++    return 0;
++}
+diff --git a/config.tests/mir/main.cpp b/config.tests/mir/main.cpp
+new file mode 100644
+index 0000000..5b128ab
+--- /dev/null
++++ b/config.tests/mir/main.cpp
+@@ -0,0 +1,42 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include <mir_toolkit/mir_connection.h>
++#include <mir_toolkit/mir_input_device.h>
++
++int main()
++{
++    MirInputConfig* (*function_is_available)(MirConnection *connection);
++    function_is_available = &mir_connection_create_input_config;
++    return 0;
++}
+diff --git a/config.tests/mir/mir.pro b/config.tests/mir/mir.pro
+new file mode 100644
+index 0000000..694373a
+--- /dev/null
++++ b/config.tests/mir/mir.pro
+@@ -0,0 +1,8 @@
++TEMPLATE = app
++
++CONFIG += link_pkgconfig
++PKGCONFIG += mirclient
++
++TARGET = mir
++
++SOURCES += main.cpp
+diff --git a/examples/systeminfo/inputinfo/inputinfo.pro b/examples/systeminfo/inputinfo/inputinfo.pro
+new file mode 100644
+index 0000000..a5365fa
+--- /dev/null
++++ b/examples/systeminfo/inputinfo/inputinfo.pro
+@@ -0,0 +1,26 @@
++#-------------------------------------------------
++#
++# Project created by QtCreator 2014-11-28T12:25:04
++#
++#-------------------------------------------------
++
++QT       += core systeminfo
++
++QT       -= gui
++
++TARGET = inputinfo
++CONFIG   += console
++CONFIG   -= app_bundle
++
++TEMPLATE = app
++
++
++SOURCES += main.cpp \
++    inputtest.cpp
++
++HEADERS += \
++    inputtest.h
++
++target.path = $$[QT_INSTALL_EXAMPLES]/systeminfo/inputinfo
++        app.path = $$[QT_INSTALL_EXAMPLES]/systeminfo/inputinfo
++        INSTALLS += target app
+diff --git a/examples/systeminfo/inputinfo/inputtest.cpp b/examples/systeminfo/inputinfo/inputtest.cpp
+new file mode 100644
+index 0000000..3b608c5
+--- /dev/null
++++ b/examples/systeminfo/inputinfo/inputtest.cpp
+@@ -0,0 +1,143 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include "inputtest.h"
++#include <qinputinfo.h>
++#include <QDebug>
++
++Inputtest::Inputtest(QObject *parent) :
++    QObject(parent)
++{
++    inputDeviceManager = new QInputInfoManager(this);
++    connect(inputDeviceManager, &QInputInfoManager::deviceAdded,this,&Inputtest::deviceAdded);
++    connect(inputDeviceManager, &QInputInfoManager::deviceRemoved,this,&Inputtest::deviceRemoved);
++    connect(inputDeviceManager, &QInputInfoManager::ready,this,&Inputtest::ready);
++    connect(inputDeviceManager, &QInputInfoManager::filterChanged,this,&Inputtest::filterChanged);
++    connect(inputDeviceManager, &QInputInfoManager::countChanged,this,&Inputtest::countChanged);
++
++    QMap <QString, QInputDevice *> map = inputDeviceManager->deviceMap();
++    qDebug() << map.count();
++}
++
++void Inputtest::deviceAdded(const QInputDevice *devicePath)
++{
++    qDebug() << Q_FUNC_INFO << devicePath;
++
++ //   QInputDevice *device = inputDeviceInfo->deviceMap().value(devicePath);
++
++//    qDebug() <<  inputDeviceInfo->deviceMap().count();
++//    qDebug() << device->name() << device->devicePath();
++//    qDebug() << "buttons count"<< device->buttons().count();
++//    qDebug() << "switch count"<< device->switches().count();
++//    qDebug() << "relativeAxes count"<< device->relativeAxes().count();
++//    qDebug() << "absoluteAxes count"<< device->absoluteAxes().count();
++//    qDebug() << "type" << device->type();
++//    qDebug();
++
++//    QMapIterator<QString, QInputDevice*> i(inputDeviceInfo->deviceMap());
++//    while (i.hasNext()) {
++//        i.next();
++//   //    qDebug() << i.value()->name();
++//    }
++}
++
++void Inputtest::deviceRemoved(const QString &devicePath)
++{
++    qDebug() << Q_FUNC_INFO << devicePath;
++//    QMapIterator<QString, QInputDevice*> i(inputDeviceInfo->deviceMap());
++//    while (i.hasNext()) {
++//        i.next();
++///       qDebug() << i.value()->name();
++//    }
++}
++
++void Inputtest::ready()
++{
++    qDebug() << "ready <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" ;
++    QMap <QString, QInputDevice *> map = inputDeviceManager->deviceMap();
++    qDebug() << map.count();
++
++    inputDeviceManager->setFilter(QInputDevice::Mouse | QInputDevice::Keyboard | QInputDevice::TouchScreen);
++}
++
++QString Inputtest::typeToString(QInputDevice::InputTypeFlags type)
++{
++    qDebug() << type;
++    QStringList typeString;
++    if (type.testFlag(QInputDevice::Button))
++        typeString << QStringLiteral("Button");
++    if (type.testFlag(QInputDevice::Mouse))
++        typeString << QStringLiteral("Mouse");
++    if (type.testFlag(QInputDevice::TouchPad))
++        typeString << QStringLiteral("TouchPad");
++    if (type.testFlag(QInputDevice::TouchScreen))
++        typeString << QStringLiteral("TouchScreen");
++    if (type.testFlag(QInputDevice::Keyboard))
++        typeString << QStringLiteral("Keyboard");
++    if (type.testFlag(QInputDevice::Switch))
++        typeString << QStringLiteral("Switch");
++
++    if (typeString.isEmpty())
++        typeString << QStringLiteral("Unknown");
++    return typeString.join((", "));
++}
++
++ void Inputtest::filterChanged(QInputDevice::InputTypeFlags filterFlags)
++ {
++     qDebug() << Q_FUNC_INFO << filterFlags;
++
++     qDebug() <<"Found"<<  inputDeviceManager->deviceMap().count() << "input devices";
++     QMapIterator<QString, QInputDevice*> i(inputDeviceManager->deviceMap());
++     while (i.hasNext()) {
++         i.next();
++             qDebug() << i.value()->name() << i.value()->identifier();
++             qDebug() << "buttons count"<< i.value()->buttons().count();
++             qDebug() << "switch count"<< i.value()->switches().count();
++             qDebug() << "relativeAxes count"<< i.value()->relativeAxes().count();
++             qDebug() << "absoluteAxes count"<< i.value()->absoluteAxes().count();
++             qDebug() << "type" << typeToString(i.value()->types());
++
++             qDebug();
++ //       qDebug() << i.value()->name();
++     }
++     qDebug() << "Number of keyboards:" << inputDeviceManager->count(QInputDevice::Keyboard);
++     qDebug() << "Number of mice:" << inputDeviceManager->count(QInputDevice::Mouse);
++     qDebug() << "Number of touchscreens:" << inputDeviceManager->count(QInputDevice::TouchScreen);
++ }
++
++ void Inputtest::countChanged(int newCount)
++ {
++     qWarning() << Q_FUNC_INFO << newCount;
++ }
++
+diff --git a/examples/systeminfo/inputinfo/inputtest.h b/examples/systeminfo/inputinfo/inputtest.h
+new file mode 100644
+index 0000000..ea755e9
+--- /dev/null
++++ b/examples/systeminfo/inputinfo/inputtest.h
+@@ -0,0 +1,62 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#ifndef INPUTTEST_H
++#define INPUTTEST_H
++
++#include <QObject>
++#include <qinputinfo.h>
++
++class Inputtest : public QObject
++{
++    Q_OBJECT
++public:
++    explicit Inputtest(QObject *parent = Q_NULLPTR);
++
++    QInputInfoManager *inputDeviceManager;
++signals:
++
++public slots:
++
++    void deviceAdded(const QInputDevice *);
++    void deviceRemoved(const QString &path);
++    void ready();
++    void filterChanged(QInputDevice::InputTypeFlags filterFlags);
++    void countChanged(int);
++private:
++    QString typeToString(QInputDevice::InputTypeFlags type);
++
++};
++
++#endif // INPUTTEST_H
+diff --git a/examples/systeminfo/inputinfo/main.cpp b/examples/systeminfo/inputinfo/main.cpp
+new file mode 100644
+index 0000000..f9bd175
+--- /dev/null
++++ b/examples/systeminfo/inputinfo/main.cpp
+@@ -0,0 +1,43 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++#include <QCoreApplication>
++#include "inputtest.h"
++
++int main(int argc, char *argv[])
++{
++    QCoreApplication a(argc, argv);
++
++    Inputtest inputest(&a);
++    return a.exec();
++}
+diff --git a/examples/systeminfo/qml-inputinfo/main.cpp b/examples/systeminfo/qml-inputinfo/main.cpp
+new file mode 100644
+index 0000000..88f6791
+--- /dev/null
++++ b/examples/systeminfo/qml-inputinfo/main.cpp
+@@ -0,0 +1,36 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include"../stub.h"
++SYSINFO_EXAMPLE_MAIN(qml-inputinfo)
+diff --git a/examples/systeminfo/qml-inputinfo/qml-inputinfo.pro b/examples/systeminfo/qml-inputinfo/qml-inputinfo.pro
+new file mode 100644
+index 0000000..4b49738
+--- /dev/null
++++ b/examples/systeminfo/qml-inputinfo/qml-inputinfo.pro
+@@ -0,0 +1,14 @@
++TEMPLATE = app
++TARGET = qml-inputinfo
++QT += quick
++SOURCES = main.cpp
++
++app.files = \
++    $$files(*.qml) \
++
++target.path = $$[QT_INSTALL_EXAMPLES]/systeminfo/qml-inputinfo
++app.path = $$[QT_INSTALL_EXAMPLES]/systeminfo/qml-inputinfo
++INSTALLS += target app
++
++RESOURCES += \
++    qml-inputinfo.qrc
+diff --git a/examples/systeminfo/qml-inputinfo/qml-inputinfo.qml b/examples/systeminfo/qml-inputinfo/qml-inputinfo.qml
+new file mode 100644
+index 0000000..6f99b97
+--- /dev/null
++++ b/examples/systeminfo/qml-inputinfo/qml-inputinfo.qml
+@@ -0,0 +1,118 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++import QtQuick 2.0
++import QtSystemInfo 5.5
++
++Rectangle {
++    width: 900
++    height: 480
++
++    ListView {
++        anchors.fill: parent
++        id: inputList
++        model: deviceModel
++        delegate: deviceDelegate
++        anchors.margins: 6
++    }
++
++    Component {
++        id: deviceDelegate
++
++        Rectangle {
++            id: contentRect
++            anchors { left: parent.left; right: parent.right }
++            height: 20
++            Row {
++                id: row
++                spacing: 10
++                Text { text: name }
++                Text { text: identifier }
++                Text { text: typeToString(types) }
++            }
++        }
++    }
++    InputDeviceModel {
++        id: deviceModel
++        filter: InputInfo.Keyboard | InputInfo.Mouse | InputInfo.TouchScreen
++        onCountChanged: {
++         console.log("new count of filtered devices: " + devices)
++        }
++    }
++
++    InputInfo {
++        id: systemInputs
++    }
++
++    InputDeviceManager {
++        id: deviceManager
++        filter: InputInfo.Mouse | InputInfo.Keyboard
++        onReady: {
++            console.log("number of mouse and keyboard devices: " + deviceManager.count)
++            console.log("row count " + deviceModel.count)
++        }
++        onDeviceAdded: {
++            console.log(inputDevice.properties.name+" " + inputDevice.properties.types +" "+InputInfo.Mouse)
++            // does not seem to work
++            if (inputDevice.properties.types & InputInfo.Mouse) {
++                console.log("mouse added")
++            }
++            if (inputDevice.properties.types & InputInfo.Keyboard) {
++                console.log("keyboard added")
++            }
++        }
++        onDeviceRemoved: {
++            console.log("device removed "+deviceId)
++        }
++    }
++
++    function typeToString(flags) {
++        var typeString = ""
++        if (flags & InputInfo.Button)
++            typeString += "Button, "
++        if (flags & InputInfo.Mouse)
++            typeString += "Mouse, "
++        if (flags & InputInfo.TouchPad)
++            typeString += "TouchPad, "
++        if (flags & InputInfo.TouchScreen)
++            typeString += "TouchScreen, "
++        if (flags & InputInfo.Keyboard)
++            typeString += "Keyboard, "
++        if (flags & InputInfo.Switch)
++            typeString += "Switch "
++
++        console.log(typeString)
++
++        return typeString
++    }
++}
+diff --git a/examples/systeminfo/qml-inputinfo/qml-inputinfo.qrc b/examples/systeminfo/qml-inputinfo/qml-inputinfo.qrc
+new file mode 100644
+index 0000000..6b23f27
+--- /dev/null
++++ b/examples/systeminfo/qml-inputinfo/qml-inputinfo.qrc
+@@ -0,0 +1,5 @@
++<RCC>
++    <qresource prefix="/">
++        <file>qml-inputinfo.qml</file>
++    </qresource>
++</RCC>
+diff --git a/examples/systeminfo/systeminfo.pro b/examples/systeminfo/systeminfo.pro
+index cdc36e0..e9e6f68 100644
+--- a/examples/systeminfo/systeminfo.pro
++++ b/examples/systeminfo/systeminfo.pro
+@@ -4,6 +4,11 @@ SUBDIRS += \
+     qml-deviceinfo \
+     qml-battery
+ 
++linux-*: !simulator: {
++    SUBDIRS += \
++        qml-inputinfo \
++        inputinfo
++}
+ #qtHaveModule(widgets): SUBDIRS += \
+ 
+ OTHER_FILES = stub.h
+diff --git a/qtsystems.pro b/qtsystems.pro
+index 3a455fa..2bd27e8 100644
+--- a/qtsystems.pro
++++ b/qtsystems.pro
+@@ -4,7 +4,9 @@ load(configure)
+     qtCompileTest(gconf)
+     qtCompileTest(bluez)
+     qtCompileTest(udev)
++    qtCompileTest(evdev)
+     qtCompileTest(x11)
++    qtCompileTest(mir)
+ 
+     # FIXME: This causes tests to be installed (if examples are installed as well),
+     # which is needed to run some tests because they are broken.
+diff --git a/src/imports/systeminfo/plugins.qmltypes b/src/imports/systeminfo/plugins.qmltypes
+index 858fbad..ff59258 100644
+--- a/src/imports/systeminfo/plugins.qmltypes
++++ b/src/imports/systeminfo/plugins.qmltypes
+@@ -4,7 +4,7 @@ import QtQuick.tooling 1.1
+ // It is used for QML tooling purposes only.
+ //
+ // This file was auto-generated by:
+-// 'qmlplugindump -notrelocatable QtSystemInfo 5.0'
++// 'qmlplugindump -notrelocatable --noinstantiate QtSystemInfo 5.0 QtSystemInfo'
+ 
+ Module {
+     Component {
+@@ -206,6 +206,49 @@ Module {
+         }
+     }
+     Component {
++        name: "QDeclarativeInputDeviceModel"
++        prototype: "QAbstractListModel"
++        exports: ["QtSystemInfo/InputDeviceModel 5.5"]
++        exportMetaObjectRevisions: [0]
++        Enum {
++            name: "ItemRoles"
++            values: {
++                "ServiceRole": 257,
++                "NameRole": 258,
++                "DevicePathRole": 259,
++                "ButtonsRole": 260,
++                "SwitchesRole": 261,
++                "RelativeAxisRole": 262,
++                "AbsoluteAxisRole": 263,
++                "TypesRole": 264
++            }
++        }
++        Property { name: "filter"; type: "QInputDevice::InputTypeFlags" }
++        Signal {
++            name: "added"
++            Parameter { name: "inputDevice"; type: "QInputDevice"; isPointer: true }
++        }
++        Signal {
++            name: "removed"
++            Parameter { name: "deviceId"; type: "string" }
++        }
++        Signal {
++            name: "filterChanged"
++            Parameter { name: "filterFlags"; type: "QInputDevice::InputTypeFlags" }
++        }
++        Method { name: "updateDeviceList" }
++        Method {
++            name: "indexOf"
++            type: "int"
++            Parameter { name: "devicePath"; type: "string" }
++        }
++        Method {
++            name: "get"
++            type: "QInputDevice*"
++            Parameter { name: "index"; type: "int" }
++        }
++    }
++    Component {
+         name: "QDeclarativeNetworkInfo"
+         prototype: "QObject"
+         exports: ["QtSystemInfo/NetworkInfo 5.0"]
+@@ -378,6 +421,71 @@ Module {
+         }
+     }
+     Component {
++        name: "QInputDevice"
++        prototype: "QObject"
++        exports: ["QtSystemInfo/InputInfo 5.5"]
++        exportMetaObjectRevisions: [0]
++        Enum {
++            name: "InputType"
++            values: {
++                "Unknown": 0,
++                "Button": 1,
++                "Mouse": 2,
++                "TouchPad": 4,
++                "TouchScreen": 8,
++                "Keyboard": 16,
++                "Switch": 32
++            }
++        }
++        Enum {
++            name: "InputTypeFlags"
++            values: {
++                "Unknown": 0,
++                "Button": 1,
++                "Mouse": 2,
++                "TouchPad": 4,
++                "TouchScreen": 8,
++                "Keyboard": 16,
++                "Switch": 32
++            }
++        }
++        Property { name: "properties"; type: "QVariantMap"; isReadonly: true }
++    }
++    Component {
++        name: "QInputInfoManager"
++        prototype: "QObject"
++        exports: ["QtSystemInfo/InputDeviceManager 5.5"]
++        exportMetaObjectRevisions: [0]
++        Property { name: "count"; type: "int"; isReadonly: true }
++        Property { name: "filter"; type: "QInputDevice::InputTypeFlags" }
++        Property { name: "lastAdded"; type: "QInputDevice"; isReadonly: true; isPointer: true }
++        Signal { name: "ready" }
++        Signal {
++            name: "deviceAdded"
++            Parameter { name: "inputDevice"; type: "QInputDevice"; isPointer: true }
++        }
++        Signal {
++            name: "deviceRemoved"
++            Parameter { name: "deviceId"; type: "string" }
++        }
++        Signal {
++            name: "countChanged"
++            Parameter { name: "count"; type: "int" }
++        }
++        Signal {
++            name: "filterChanged"
++            Parameter { name: "filterFlags"; type: "QInputDevice::InputTypeFlags" }
++        }
++        Method {
++            name: "addedDevice"
++            Parameter { name: "devicePath"; type: "QInputDevice"; isPointer: true }
++        }
++        Method {
++            name: "removedDevice"
++            Parameter { name: "deviceId"; type: "string" }
++        }
++    }
++    Component {
+         name: "QScreenSaver"
+         prototype: "QObject"
+         exports: ["QtSystemInfo/ScreenSaver 5.0"]
+diff --git a/src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp b/src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp
+new file mode 100644
+index 0000000..6a8fa52
+--- /dev/null
++++ b/src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp
+@@ -0,0 +1,204 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical Limited and/or its subsidiary(-ies).
++** Copyright (C) 2015 Jolla.
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include "qdeclarativeinputdevicemodel_p.h"
++#include "qinputinfo.h"
++
++QT_BEGIN_NAMESPACE
++
++QDeclarativeInputDeviceModel::QDeclarativeInputDeviceModel(QObject *parent) :
++    QAbstractListModel(parent),
++    deviceInfoManager(new QInputInfoManager),
++    currentFilter(QInputDevice::UnknownType)
++{
++    connect(deviceInfoManager,SIGNAL(ready()),this,SLOT(updateDeviceList()));
++    connect(deviceInfoManager,SIGNAL(filterChanged(QInputDevice::InputTypeFlags)),
++            this,SLOT(updateDeviceList()));
++
++    connect(deviceInfoManager, &QInputInfoManager::deviceAdded,
++            this,&QDeclarativeInputDeviceModel::addedDevice);
++    connect(deviceInfoManager, &QInputInfoManager::deviceRemoved,
++            this,&QDeclarativeInputDeviceModel::removedDevice);
++    connect(deviceInfoManager, &QInputInfoManager::countChanged,
++            this,&QDeclarativeInputDeviceModel::countChanged);
++}
++
++QDeclarativeInputDeviceModel::~QDeclarativeInputDeviceModel()
++{
++    delete deviceInfoManager;
++}
++
++QVariant QDeclarativeInputDeviceModel::data(const QModelIndex &index, int role) const
++{
++    QInputDevice *device = inputDevices.value(index.row());
++    if (!device)
++        return QVariant();
++
++    switch (role) {
++    case ServiceRole:
++        return QVariant::fromValue(static_cast<QObject *>(device));
++        break;
++    case NameRole:
++        return QVariant::fromValue(static_cast<QString>(device->name()));
++        break;
++    case IdentifierRole:
++        return QVariant::fromValue(static_cast<QString>(device->identifier()));
++        break;
++    case ButtonsRole:
++        return QVariant::fromValue(static_cast<QList <int> >(device->buttons()));
++        break;
++    case SwitchesRole:
++        return QVariant::fromValue(static_cast<QList <int> >(device->switches()));
++        break;
++    case RelativeAxesRole:
++        return QVariant::fromValue(static_cast<QList <int> >(device->relativeAxes()));
++        break;
++    case AbsoluteAxesRole:
++        return QVariant::fromValue(static_cast<QList <int> >(device->absoluteAxes()));
++        break;
++    case TypesRole:
++        return QVariant::fromValue(static_cast<int>(device->types()));
++        break;
++    };
++
++    return QVariant();
++}
++
++int QDeclarativeInputDeviceModel::rowCount(const QModelIndex &parent) const
++{
++    Q_UNUSED(parent);
++
++    return inputDevices.count();
++}
++
++int QDeclarativeInputDeviceModel::indexOf(const QString &devicePath) const
++{
++    int idx(-1);
++    Q_FOREACH (QInputDevice *device, inputDevices) {
++        idx++;
++        if (device->identifier() == devicePath) return idx;
++    }
++
++    return -1;
++}
++
++QInputDevice *QDeclarativeInputDeviceModel::get(int index) const
++{
++    if (index < 0 || index > inputDevices.count())
++        return 0;
++    return inputDevices.value(index);
++}
++
++void QDeclarativeInputDeviceModel::updateDeviceList()
++{
++    QList <QInputDevice *> newDevices = deviceInfoManager->deviceMap().values();
++    int numNew = newDevices.count();
++
++    for (int i = 0; i < numNew; i++) {
++        int j = inputDevices.indexOf(newDevices.value(i));
++
++        if (j == -1) {
++            beginInsertRows(QModelIndex(), i, i);
++            inputDevices.insert(i, newDevices.value(i));
++            endInsertRows();
++        } else if (i != j) {
++            // changed its position -> move it
++            QInputDevice* device = inputDevices.value(j);
++            beginMoveRows(QModelIndex(), j, j, QModelIndex(), i);
++            inputDevices.remove(j);
++            if (i >= inputDevices.size())
++                inputDevices.resize(i + 1);
++            inputDevices.insert(i, device);
++            endMoveRows();
++        } //else {
++        QModelIndex changedIndex(this->index(j, 0, QModelIndex()));
++        Q_EMIT dataChanged(changedIndex, changedIndex);
++    }
++
++    int numOld = inputDevices.count();
++    if (numOld > numNew) {
++        beginRemoveRows(QModelIndex(), numNew, numOld - 1);
++        inputDevices.remove(numNew, numOld - numNew);
++        endRemoveRows();
++    }
++}
++
++void QDeclarativeInputDeviceModel::addedDevice(QInputDevice *device)
++{
++    updateDeviceList();
++    setFilter(currentFilter);
++    Q_EMIT added(device);
++}
++
++void QDeclarativeInputDeviceModel::removedDevice(const QString &devicePath)
++{
++    updateDeviceList();
++    setFilter(currentFilter);
++    Q_EMIT removed(devicePath);
++}
++
++QHash<int,QByteArray> QDeclarativeInputDeviceModel::roleNames() const
++{
++    QHash<int, QByteArray> roles;
++    roles[NameRole] = "name";
++    roles[IdentifierRole] = "identifier";
++    roles[ButtonsRole] = "buttons";
++    roles[SwitchesRole] = "switches";
++    roles[RelativeAxesRole] = "rAxis";
++    roles[AbsoluteAxesRole] = "aAxis";
++    roles[TypesRole] = "types";
++    return roles;
++}
++
++/*
++ * Returns the currently set device filter.
++ * */
++QInputDevice::InputTypeFlags QDeclarativeInputDeviceModel::filter()
++{
++    return currentFilter;
++}
++
++/*
++ * Sets the current  input device filter to filter.
++ * */
++void QDeclarativeInputDeviceModel::setFilter(QInputDevice::InputTypeFlags filter)
++{
++    if (filter != currentFilter) {
++        deviceInfoManager->setFilter(filter);
++        currentFilter = filter;
++        Q_EMIT filterChanged(filter);
++    }
++}
++
++QT_END_NAMESPACE
+diff --git a/src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h b/src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h
+new file mode 100644
+index 0000000..85c95a8
+--- /dev/null
++++ b/src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h
+@@ -0,0 +1,101 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#ifndef QDECLARATIVEINPUTDEVICEMODEL_H
++#define QDECLARATIVEINPUTDEVICEMODEL_H
++
++#include <QObject>
++#include <QAbstractListModel>
++#include "qinputinfo.h"
++
++QT_BEGIN_NAMESPACE
++
++class QDeclarativeInputDeviceModel : public QAbstractListModel
++{
++    Q_OBJECT
++
++    Q_PROPERTY(QInputDevice::InputTypeFlags filter READ filter WRITE setFilter NOTIFY filterChanged)
++    Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
++
++public:
++    enum ItemRoles {
++        ServiceRole = Qt::UserRole + 1,
++        NameRole,
++        IdentifierRole,
++        ButtonsRole,
++        SwitchesRole,
++        RelativeAxesRole,
++        AbsoluteAxesRole,
++        TypesRole
++    };
++    Q_ENUMS(ItemRoles)
++
++    explicit QDeclarativeInputDeviceModel(QObject *parent = 0);
++    virtual ~QDeclarativeInputDeviceModel();
++
++    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
++    int rowCount(const QModelIndex &parent = QModelIndex()) const;
++
++    void setFilter(QInputDevice::InputTypeFlags filterFlags);
++    QInputDevice::InputTypeFlags filter();
++
++    Q_INVOKABLE int indexOf(const QString &devicePath) const;
++
++    Q_INVOKABLE QInputDevice *get(int index) const;
++    QHash<int, QByteArray> roleNames() const;
++
++Q_SIGNALS:
++    void added(QInputDevice *inputDevice);
++    void removed(const QString &deviceId);
++    void filterChanged(QInputDevice::InputTypeFlags filterFlags);
++    void countChanged(int devices);
++
++public Q_SLOTS:
++    void updateDeviceList();
++private:
++    QInputInfoManager *deviceInfoManager;
++    QVector<QInputDevice *> inputDevices;
++    QInputDevice::InputTypeFlags currentFilter;
++    QInputDevice *m_lastAddedDevice;
++
++private slots:
++    void addedDevice(QInputDevice *device);
++    void removedDevice(const QString &path);
++
++};
++
++QT_END_NAMESPACE
++
++Q_DECLARE_METATYPE(QDeclarativeInputDeviceModel::ItemRoles)
++
++#endif // QDECLARATIVEINPUTDEVICEMODEL_H
+diff --git a/src/imports/systeminfo/qdeclarativenetworkinfo.cpp b/src/imports/systeminfo/qdeclarativenetworkinfo.cpp
+index 72594b4..308cb8e 100644
+--- a/src/imports/systeminfo/qdeclarativenetworkinfo.cpp
++++ b/src/imports/systeminfo/qdeclarativenetworkinfo.cpp
+@@ -1,5 +1,6 @@
+ /****************************************************************************
+ **
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
+ ** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
+ ** Contact: http://www.qt-project.org/legal
+ **
+diff --git a/src/imports/systeminfo/qsysteminfo.cpp b/src/imports/systeminfo/qsysteminfo.cpp
+index d74d259..8e9c59a 100644
+--- a/src/imports/systeminfo/qsysteminfo.cpp
++++ b/src/imports/systeminfo/qsysteminfo.cpp
+@@ -37,7 +37,11 @@
+ #include "qbatteryinfo.h"
+ #include "qdeclarativedeviceinfo_p.h"
+ #include "qdeclarativenetworkinfo_p.h"
++#if defined(Q_OS_LINUX)
++#include "qdeclarativeinputdevicemodel_p.h"
++#endif
+ #include <qscreensaver.h>
++#include "qinputinfo.h"
+ 
+ QT_BEGIN_NAMESPACE
+ 
+@@ -57,6 +61,13 @@ public:
+         qmlRegisterType<QDeclarativeDeviceInfo>(uri, major, minor, "DeviceInfo");
+         qmlRegisterType<QDeclarativeNetworkInfo>(uri, major, minor, "NetworkInfo");
+         qmlRegisterType<QScreenSaver>(uri, major, minor, "ScreenSaver");
++
++#if defined(Q_OS_LINUX)
++        minor = 5;
++        qmlRegisterType<QInputInfoManager>(uri, major, minor, "InputDeviceManager");
++        qmlRegisterType<QDeclarativeInputDeviceModel>(uri, major, minor, "InputDeviceModel");
++        qmlRegisterType<QInputDevice>(uri, major, minor, "InputInfo");
++#endif
+     }
+ };
+ 
+diff --git a/src/imports/systeminfo/systeminfo.pro b/src/imports/systeminfo/systeminfo.pro
+index f14c6ea..28c1a32 100644
+--- a/src/imports/systeminfo/systeminfo.pro
++++ b/src/imports/systeminfo/systeminfo.pro
+@@ -10,4 +10,10 @@ SOURCES += \
+     qdeclarativenetworkinfo.cpp \
+     qsysteminfo.cpp
+ 
++linux-*: !simulator: {
++    HEADERS += \
++        qdeclarativeinputdevicemodel_p.h
++    SOURCES += \
++        qdeclarativeinputdevicemodel.cpp \
++}
+ load(qml_plugin)
+diff --git a/src/systeminfo/linux/qinputinfomanager.cpp b/src/systeminfo/linux/qinputinfomanager.cpp
+new file mode 100644
+index 0000000..d2e1b5c
+--- /dev/null
++++ b/src/systeminfo/linux/qinputinfomanager.cpp
+@@ -0,0 +1,40 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include "qinputinfomanager_p.h"
++
++QInputInfoManagerPrivate::QInputInfoManagerPrivate(QObject *parent) :
++    QObject(parent)
++{
++}
+diff --git a/src/systeminfo/linux/qinputinfomanager_p.h b/src/systeminfo/linux/qinputinfomanager_p.h
+new file mode 100644
+index 0000000..099a802
+--- /dev/null
++++ b/src/systeminfo/linux/qinputinfomanager_p.h
+@@ -0,0 +1,74 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#ifndef QINPUTDEVICEINFO_LINUX_P_H
++#define QINPUTDEVICEINFO_LINUX_P_H
++
++#include <QObject>
++#include "qinputinfo.h"
++
++QT_BEGIN_NAMESPACE
++
++class QInputDevicePrivate : public QObject
++{
++    Q_OBJECT
++public:
++    explicit QInputDevicePrivate(QObject *parent = 0);
++
++    QString name;
++    QString identifier;
++    QList <int> buttons; //keys
++    QList <int> switches;
++    QList <int> relativeAxes;
++    QList <int> absoluteAxes;
++    QInputDevice::InputTypeFlags type;
++};
++
++class QInputInfoManagerPrivate : public QObject
++{
++    Q_OBJECT
++public:
++    explicit QInputInfoManagerPrivate(QObject *parent = 0);
++    QVector <QInputDevice *> deviceList;
++    QMap <QString, QInputDevice *> deviceMap;
++    static QInputInfoManagerPrivate * instance();
++
++signals:
++    void deviceAdded( QInputDevice *inputDevice);
++    void deviceRemoved(const QString &deviceId);
++    void ready();
++};
++
++QT_END_NAMESPACE
++
++#endif // QINPUTDEVICEINFO_LINUX_P_H
+diff --git a/src/systeminfo/linux/qinputinfomanagermir.cpp b/src/systeminfo/linux/qinputinfomanagermir.cpp
+new file mode 100644
+index 0000000..f86a35f
+--- /dev/null
++++ b/src/systeminfo/linux/qinputinfomanagermir.cpp
+@@ -0,0 +1,129 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include "qinputinfomanagermir_p.h"
++#include "linux/input-event-codes.h"
++
++QInputInfoManagerMir::QInputInfoManagerMir(MirConnection *con, QObject *parent)
++    : QInputInfoManagerPrivate(parent), connection{con}, config{mir_connection_create_input_config(con), mir_input_config_destroy}
++{
++    mir_connection_set_input_config_change_callback(
++        connection,
++        [](MirConnection* con, void* context)
++        {
++            QInputInfoManagerMir *this_ = static_cast<QInputInfoManagerMir*>(context);
++            this_->config = MirInputConfigPtr{mir_connection_create_input_config(con), mir_input_config_destroy};
++            this_->update_devices();
++        }, this);
++
++    update_devices();
++}
++
++void QInputInfoManagerMir::update_devices()
++{
++    QList<QString> deletedDevices = deviceMap.keys();
++
++    for (int index = 0, e = mir_input_config_device_count(config.get()); index!=e; ++index) {
++
++        MirInputDevice const *input_device = mir_input_config_get_device(
++            config.get(),
++            index);
++
++        QString id = QString::number(mir_input_device_get_id(input_device));
++        if (!deviceMap.contains(id)) {
++            QInputDevice *nDevice = new QInputDevice(this);
++            nDevice->setName(QString::fromUtf8(mir_input_device_get_name(input_device)));
++            nDevice->setIdentifier(id);
++            QInputDevice::InputTypeFlags flags = QInputDevice::UnknownType;
++
++            MirInputDeviceCapabilities caps = mir_input_device_get_capabilities(input_device);
++
++            if (caps & mir_input_device_capability_pointer) {
++                nDevice->addRelativeAxis(REL_X);
++                nDevice->addRelativeAxis(REL_Y);
++                nDevice->addRelativeAxis(REL_WHEEL);
++                nDevice->addButton(BTN_MOUSE);
++                nDevice->addButton(BTN_RIGHT);
++                nDevice->addButton(BTN_MIDDLE);
++                if (caps & mir_input_device_capability_touchpad)
++                {
++                    flags |= QInputDevice::TouchPad;
++                }
++                else
++                {
++                    flags |= QInputDevice::Mouse;
++                    nDevice->addButton(BTN_SIDE);
++                    nDevice->addButton(BTN_EXTRA);
++                    nDevice->addButton(BTN_FORWARD);
++                    nDevice->addButton(BTN_BACK);
++                    nDevice->addButton(BTN_TASK);
++                }
++            }
++
++            if (caps & mir_input_device_capability_keyboard)
++            {
++                flags |= QInputDevice::Button;
++
++                // keyboard with enough keys for text entry
++                if (caps & mir_input_device_capability_alpha_numeric)
++                {
++                    flags |= QInputDevice::Keyboard;
++                    for (int i = KEY_1; i != KEY_SLASH; ++i)
++                        nDevice->addButton(i);
++                }
++            }
++
++            nDevice->setTypes(flags);
++
++            deviceMap.insert(id, nDevice);
++            deviceList.push_back(nDevice);
++
++            Q_EMIT deviceAdded(nDevice);
++        }
++        else
++        {
++            deletedDevices.removeOne(id);
++        }
++    }
++
++    for (QList<QString>::const_iterator it = deletedDevices.begin(), e = deletedDevices.end();
++         it != e ; ++it)
++    {
++        QInputDevice * device = deviceMap.take(*it);
++        deviceList.removeOne(device);
++        Q_EMIT deviceRemoved(*it);
++        delete device;
++    }
++    Q_EMIT ready();
++}
+diff --git a/src/systeminfo/linux/qinputinfomanagermir_p.h b/src/systeminfo/linux/qinputinfomanagermir_p.h
+new file mode 100644
+index 0000000..1090412
+--- /dev/null
++++ b/src/systeminfo/linux/qinputinfomanagermir_p.h
+@@ -0,0 +1,60 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#ifndef QINPUTINFOMANAGER_MIR_P_H
++#define QINPUTINFOMANAGER_MIR_P_H
++
++#include "qinputinfomanager_p.h"
++#include <mir_toolkit/client_types.h>
++#include <mir_toolkit/mir_connection.h>
++#include <mir_toolkit/mir_input_device.h>
++
++#include <memory>
++
++QT_BEGIN_NAMESPACE
++
++class QInputInfoManagerMir : public QInputInfoManagerPrivate
++{
++public:
++    QInputInfoManagerMir(MirConnection *con, QObject *parent = NULL);
++
++private:
++    void update_devices();
++    MirConnection *connection;
++    using MirInputConfigPtr = std::unique_ptr<MirInputConfig const,void (*)(MirInputConfig const*)>;
++    MirInputConfigPtr config;
++};
++
++QT_END_NAMESPACE
++
++#endif // QINPUTINFOMANAGER_MIR_P_H
+diff --git a/src/systeminfo/linux/qinputinfomanagerudev.cpp b/src/systeminfo/linux/qinputinfomanagerudev.cpp
+new file mode 100644
+index 0000000..b40941e
+--- /dev/null
++++ b/src/systeminfo/linux/qinputinfomanagerudev.cpp
+@@ -0,0 +1,281 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include "qinputinfomanagerudev_p.h"
++
++#include <libudev.h>
++#ifndef QT_NO_EVDEV
++#include <libevdev/libevdev.h>
++#endif
++#include <fcntl.h>
++#include <QDebug>
++#include <QDir>
++#include <QSocketNotifier>
++#include <QTimer>
++
++QInputInfoManagerUdev::QInputInfoManagerUdev(QObject *parent) :
++    QInputInfoManagerPrivate(parent),
++    udevice(0)
++{
++    QTimer::singleShot(250,this,SLOT(init()));
++}
++
++QInputInfoManagerUdev::~QInputInfoManagerUdev()
++{
++    udev_unref(udevice);
++    udev_monitor_unref(udevMonitor);
++}
++
++void QInputInfoManagerUdev::init()
++{
++    if (!udevice)
++        udevice = udev_new();
++
++    udev_list_entry *devices;
++    udev_list_entry *dev_list_entry;
++    udev_device *dev;
++
++    QString subsystem = QStringLiteral("input");
++    struct udev_enumerate *enumerate = 0;
++
++    if (udevice) {
++
++        udevMonitor = udev_monitor_new_from_netlink(udevice, "udev");
++        udev_monitor_filter_add_match_subsystem_devtype(udevMonitor, subsystem.toLatin1(), NULL);
++        enumerate = udev_enumerate_new(udevice);
++        udev_enumerate_add_match_subsystem(enumerate, subsystem.toLatin1());
++
++        udev_monitor_enable_receiving(udevMonitor);
++        notifierFd = udev_monitor_get_fd(udevMonitor);
++
++        notifier = new QSocketNotifier(notifierFd, QSocketNotifier::Read, this);
++        connect(notifier, SIGNAL(activated(int)), this, SLOT(onUDevChanges()));
++
++        udev_enumerate_scan_devices(enumerate);
++        devices = udev_enumerate_get_list_entry(enumerate);
++
++        udev_list_entry_foreach(dev_list_entry, devices) {
++            const char *path;
++            path = udev_list_entry_get_name(dev_list_entry);
++
++            dev = udev_device_new_from_syspath(udevice, path);
++            if (qstrcmp(udev_device_get_subsystem(dev), "input") == 0 ) {
++                QInputDevice *iDevice = addDevice(dev);
++                if (iDevice && !iDevice->identifier().isEmpty()) {
++                    deviceMap.insert(iDevice->identifier(),iDevice);
++                }
++            }
++            udev_device_unref(dev);
++        }
++        udev_enumerate_unref(enumerate);
++    }
++ //   udev_unref(udevice);
++    Q_FOREACH (const QString &devicePath, deviceMap.keys()) {
++        Q_EMIT deviceAdded(deviceMap.value(devicePath));
++    }
++    Q_EMIT ready();
++}
++
++QInputDevice::InputTypeFlags QInputInfoManagerUdev::getInputTypeFlags(struct udev_device *dev)
++{
++    QInputDevice::InputTypeFlags flags = QInputDevice::UnknownType;
++    if (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_KEY"), "1") == 0 ) {
++        flags |= QInputDevice::Button;
++    }
++    if (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_MOUSE"), "1") == 0) {
++        flags |= QInputDevice::Mouse;
++    }
++    if (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_TOUCHPAD"), "1") == 0) {
++        flags |= QInputDevice::TouchPad;
++    }
++    if (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_TOUCHSCREEN"), "1") == 0
++            || qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_TABLET"), "1") == 0) {
++        flags |= QInputDevice::TouchScreen;
++    }
++    if (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_KEYBOARD"), "1") == 0 ) {
++        flags |= QInputDevice::Keyboard;
++    }
++    if (!QString::fromLatin1(udev_device_get_property_value(dev, "SW")).isEmpty()) {
++        flags |= QInputDevice::Switch;
++    }
++
++    return flags;
++}
++
++QInputDevice *QInputInfoManagerUdev::addDevice(struct udev_device *udev)
++{
++    QString eventPath = QString::fromLatin1(udev_device_get_sysname(udev));
++
++    if (eventPath.contains(QStringLiteral("event")))
++        eventPath.prepend(QStringLiteral("/dev/input/"));
++
++    if (deviceMap.contains(eventPath)) {
++        return Q_NULLPTR;
++    }
++    QInputDevice *inputDevice;
++    inputDevice = addUdevDevice(udev);
++    if (!inputDevice) {
++        return Q_NULLPTR;
++    }
++    eventPath = inputDevice->identifier();
++
++    int fd = open(eventPath.toLatin1(), O_RDONLY|O_NONBLOCK);
++    if (fd == -1) {
++        return inputDevice;
++    }
++#ifndef QT_NO_EVDEV
++    struct libevdev *dev = NULL;
++    int rc = 1;
++    rc = libevdev_new_from_fd(fd, &dev);
++    if (rc < 0) {
++        qWarning() << "Failed to init libevdev ("<< strerror(-rc) << ")";
++        return Q_NULLPTR;
++    }
++
++    for (int i = 0; i < EV_MAX; i++) {
++        if (i == EV_KEY || i == EV_SW || i == EV_REL
++                || i == EV_REL || i == EV_ABS) {
++            for (int j = 0; j <  libevdev_event_type_get_max(i); j++) {
++                if (libevdev_has_event_code(dev, i, j)) {
++                    switch (i) {
++                    case EV_KEY:
++                        inputDevice->addButton(j);
++                        break;
++                    case EV_SW:
++                        inputDevice->addSwitch(j);
++                        break;
++                    case EV_REL:
++                        inputDevice->addRelativeAxis(j);
++                        break;
++                    case EV_ABS:
++                        inputDevice->addAbsoluteAxis(j);
++                        break;
++                    };
++                }
++            }
++        }
++    }
++#endif
++    return inputDevice;
++}
++
++void QInputInfoManagerUdev::addDetails(struct udev_device *)
++{
++}
++
++void QInputInfoManagerUdev::removeDevice(const QString &path)
++{
++    // this path is not a full evdev path
++    Q_FOREACH (const QString devicePath, deviceMap.keys()) {
++        if (devicePath.contains(path)) {
++            QInputDevice *removedDevice = deviceMap.take(devicePath);
++            removedDevice->deleteLater();
++            Q_EMIT deviceRemoved(devicePath);
++        }
++    }
++}
++
++QInputDevice *QInputInfoManagerUdev::addUdevDevice(struct udev_device *udev)
++{
++    QInputDevice *iDevice;
++
++    struct udev_list_entry *list;
++    struct udev_list_entry *node;
++
++    list = udev_device_get_properties_list_entry (udev);
++    QString syspath = QString::fromLatin1(udev_device_get_syspath(udev));
++    QDir sysdir(syspath);
++
++    QStringList infoList = sysdir.entryList(QStringList() << QStringLiteral("event*"),QDir::Dirs);
++
++    if (infoList.count() > 0) {
++        QString token = infoList.at(0);
++
++        token.prepend(QStringLiteral("/dev/input/"));
++        iDevice = new QInputDevice(this);
++        iDevice->setIdentifier(token);
++    } else {
++        return Q_NULLPTR;
++    }
++    udev_list_entry_foreach (node, list) {
++
++        QString key = QString::fromLatin1(udev_list_entry_get_name(node));
++        QString value = QString::fromLatin1(udev_list_entry_get_value(node));
++
++        if (key == QStringLiteral("NAME")) {
++            iDevice->setName(value.remove(QStringLiteral("\"")));
++        }
++    }
++    iDevice->setTypes(getInputTypeFlags(udev));
++    return iDevice;
++}
++
++void QInputInfoManagerUdev::onUDevChanges()
++{
++    if (!udevMonitor)
++        return;
++
++    udev_device *dev = udev_monitor_receive_device(udevMonitor);
++
++    if (dev) {
++        if (qstrcmp(udev_device_get_subsystem(dev), "input") == 0 ) {
++            QString eventPath = QString::fromLatin1(udev_device_get_sysname(dev));
++
++            QString action = QString::fromStdString(udev_device_get_action(dev));
++
++            if (!eventPath.contains(QStringLiteral("/dev/input/")))
++                eventPath.prepend(QStringLiteral("/dev/input/"));
++
++            if (action == QStringLiteral("add")) {
++                if (deviceMap.contains(eventPath)){
++                    udev_device_unref(dev);
++                    return;
++                }
++
++                QInputDevice *iDevice = addDevice(dev);
++                if (!iDevice) {
++                    delete iDevice;
++                    return;
++                }
++                iDevice->setTypes(getInputTypeFlags(dev));
++                udev_device_unref(dev);
++                deviceMap.insert(eventPath,iDevice);
++                Q_EMIT deviceAdded(deviceMap.value(eventPath));
++
++            } else if (action == QStringLiteral("remove")) {
++                removeDevice(eventPath);
++            }
++        }
++    }
++}
+diff --git a/src/systeminfo/linux/qinputinfomanagerudev_p.h b/src/systeminfo/linux/qinputinfomanagerudev_p.h
+new file mode 100644
+index 0000000..7f0275b
+--- /dev/null
++++ b/src/systeminfo/linux/qinputinfomanagerudev_p.h
+@@ -0,0 +1,70 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#ifndef QINPUTDEVICEMANAGER_UDEV_P_H
++#define QINPUTDEVICEMANAGER_UDEV_P_H
++
++#include "qinputinfomanager_p.h"
++#include <libudev.h>
++
++QT_BEGIN_NAMESPACE
++
++class QInputInfoManagerUdev : public QInputInfoManagerPrivate
++{
++    Q_OBJECT
++public:
++    explicit QInputInfoManagerUdev(QObject *parent = 0);
++    ~QInputInfoManagerUdev();
++
++private:
++    QInputDevice *addDevice(struct udev_device *udev);
++    QInputDevice *addUdevDevice(struct udev_device *);
++
++    QInputDevice *addDevice(const QString &path);
++    void removeDevice(const QString &path);
++    QSocketNotifier *notifier;
++    int notifierFd;
++    struct udev_monitor *udevMonitor;
++    QInputDevice::InputTypeFlags getInputTypeFlags(struct udev_device *);
++    struct udev *udevice;
++    void addDetails(struct udev_device *);
++
++private Q_SLOTS:
++    void onUDevChanges();
++    void init();
++};
++
++QT_END_NAMESPACE
++
++#endif // QINPUTDEVICEMANAGER_UDEV_P_H
+diff --git a/src/systeminfo/qbatteryinfo.h b/src/systeminfo/qbatteryinfo.h
+index 4ca1158..5acf8ad 100644
+--- a/src/systeminfo/qbatteryinfo.h
++++ b/src/systeminfo/qbatteryinfo.h
+@@ -35,7 +35,7 @@
+ #ifndef QBATTERYINFO_H
+ #define QBATTERYINFO_H
+ 
+-#include <QtSystemInfo/qsysteminfoglobal.h>
++#include "qsysteminfoglobal.h"
+ #include <QtCore/qobject.h>
+ 
+ QT_BEGIN_NAMESPACE
+diff --git a/src/systeminfo/qdeviceinfo.h b/src/systeminfo/qdeviceinfo.h
+index 8f831b4..c20dc67 100644
+--- a/src/systeminfo/qdeviceinfo.h
++++ b/src/systeminfo/qdeviceinfo.h
+@@ -34,7 +34,7 @@
+ #ifndef QDEVICEINFO_H
+ #define QDEVICEINFO_H
+ 
+-#include <QtSystemInfo/qsysteminfoglobal.h>
++#include "qsysteminfoglobal.h"
+ #include <QtCore/qobject.h>
+ 
+ QT_BEGIN_NAMESPACE
+diff --git a/src/systeminfo/qinputinfo.cpp b/src/systeminfo/qinputinfo.cpp
+new file mode 100644
+index 0000000..4a68a18
+--- /dev/null
++++ b/src/systeminfo/qinputinfo.cpp
+@@ -0,0 +1,481 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include "qinputinfo.h"
++
++#if defined(Q_OS_LINUX)
++#include "linux/qinputinfomanager_p.h"
++
++#if !defined(QT_NO_UDEV)
++#include "linux/qinputinfomanagerudev_p.h"
++#endif
++
++#if !defined(QT_NO_MIR)
++#include <QGuiApplication>
++#include <qpa/qplatformnativeinterface.h>
++#include "linux/qinputinfomanagermir_p.h"
++#endif
++
++#if !defined(QT_NO_UDEV)
++Q_GLOBAL_STATIC(QInputInfoManagerUdev, inputDeviceManagerUdev)
++#endif
++#if !defined(QT_NO_MIR)
++Q_GLOBAL_STATIC_WITH_ARGS(QInputInfoManagerMir,
++                          inputDeviceManagerMir,
++                          (static_cast<MirConnection*>(QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("mirconnection"))))
++#endif
++#endif
++
++QT_BEGIN_NAMESPACE
++
++/*!
++    \internal
++*/
++QInputInfoManagerPrivate * QInputInfoManagerPrivate::instance()
++{
++#ifndef QT_NO_MIR
++    if (QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("mirconnection"))
++        return inputDeviceManagerMir();
++#endif
++#ifndef QT_NO_UDEV
++    return inputDeviceManagerUdev();
++#endif
++}
++
++/*!
++    \internal
++*/
++QInputDevicePrivate::QInputDevicePrivate(QObject *parent) :
++    QObject(parent),
++    type(QInputDevice::UnknownType)
++{
++    qRegisterMetaType<QInputDevice::InputType>();
++    qRegisterMetaType<QInputDevice::InputTypeFlags>();
++}
++
++
++/*!
++    \class QInputDevice
++    \inmodule QtSystemInfo
++    \brief The QInputDevice class provides various information about one input device.
++    \ingroup systeminfo
++
++*/
++/*!
++    \enum InputType::InputType
++    This enum describes the type of input.
++
++    \value UnknownType         The input type is unknown.
++    \value Button              Input is a button.
++    \value Mouse               Input is a mouse.
++    \value TouchPad            Input is a touch pad.
++    \value TouchScreen         Input is a touch screen.
++    \value Keyboard            Input is a keyboard
++    \value Switch              Input is a switch
++*/
++
++/*!
++    Constructs a \l QInputDevice object with the given \a parent.
++*/
++QInputDevice::QInputDevice(QObject *parent) :
++    QObject(parent),
++    d_ptr(new QInputDevicePrivate(this))
++{
++}
++
++/*!
++    \property QInputDevice::properties
++    \brief The properties of this input device.
++
++    This property contains a variant map of all properties known for this input device.
++    Name and identifier properties are required.
++
++  \sa name(), identifier(), buttons(), switches(), relativeAxes(), absoluteAxes(), type()
++
++*/
++QVariantMap QInputDevice::properties()
++{
++    return deviceProperties;
++}
++
++/*
++    Returns the name of this input device.
++ */
++QString QInputDevice::name() const
++{
++    return d_ptr->name;
++}
++
++/*
++    Sets the name of this input device to \b name.
++ */
++void QInputDevice::setName(const QString &name)
++{
++    deviceProperties.insert(QStringLiteral("name"),name);
++    d_ptr->name = name;
++}
++
++/*
++    Returns the identifier of this device.
++ */
++QString QInputDevice::identifier() const
++{
++    return d_ptr->identifier;
++}
++
++/*
++    Sets the identifier of this device to /b id.
++ */
++void QInputDevice::setIdentifier(const QString &id)
++{
++    d_ptr->identifier = id;
++    deviceProperties.insert(QStringLiteral("identifier"),id);
++}
++
++/*
++    Returns the number of buttons this device has.
++ */
++QList <int> QInputDevice::buttons() const
++{
++    return d_ptr->buttons;
++}
++
++/*
++    \internal
++ */
++void QInputDevice::addButton(int buttonCode)
++{
++    d_ptr->buttons.append(buttonCode);
++    deviceProperties.insert(QStringLiteral("buttons"),QVariant::fromValue(d_ptr->buttons));
++}
++
++/*
++    Returns the number of switches of this device.
++ */
++QList <int> QInputDevice::switches() const
++{
++    return d_ptr->switches;
++}
++
++/*
++    \internal
++ */
++void QInputDevice::addSwitch(int switchCode)
++{
++    d_ptr->switches.append(switchCode);
++    deviceProperties.insert(QStringLiteral("switches"),QVariant::fromValue(d_ptr->switches));
++}
++
++/*
++    Returns a list of the relative axes of this device
++ */
++QList <int> QInputDevice::relativeAxes() const
++{
++    return d_ptr->relativeAxes;
++}
++
++/*
++    \internal
++ */
++void QInputDevice::addRelativeAxis(int axisCode)
++{
++    d_ptr->relativeAxes.append(axisCode);
++    deviceProperties.insert(QStringLiteral("rAxis"),QVariant::fromValue(d_ptr->relativeAxes));
++}
++
++/*
++    Returns a list of the absolute axes of this device
++ */
++QList <int> QInputDevice::absoluteAxes() const
++{
++    return d_ptr->absoluteAxes;
++}
++
++/*
++    \internal
++ */
++void QInputDevice::addAbsoluteAxis(int axisCode)
++{
++    d_ptr->absoluteAxes.append(axisCode);
++    deviceProperties.insert(QStringLiteral("aAxis"),QVariant::fromValue(d_ptr->absoluteAxes));
++}
++
++/*
++    Returns a QInputDevice::InputTypeFlags of all the types of types.
++ */
++QInputDevice::InputTypeFlags QInputDevice::types() const
++{
++    return d_ptr->type;
++}
++
++/*
++    \internal
++ */
++void QInputDevice::setTypes(QInputDevice::InputTypeFlags type)
++{
++    d_ptr->type = type;
++    deviceProperties.insert(QStringLiteral("types"),QVariant::fromValue(type));
++}
++
++/*!
++    \class QInputInfoManager
++    \inmodule QtSystemInfo
++
++    \brief The QInputInfoManager class manages input devices.
++
++*/
++QInputInfoManager::QInputInfoManager(QObject *parent) :
++    QObject(parent),
++    d_ptr(QInputInfoManagerPrivate::instance()),
++    currentFilter(QInputDevice::Button | QInputDevice::Mouse
++                   | QInputDevice::TouchPad | QInputDevice::TouchScreen
++                   | QInputDevice::Keyboard
++                   | QInputDevice::Switch),
++   filteredCount(0)
++{
++
++    connect(d_ptr, &QInputInfoManagerPrivate::deviceAdded,this,&QInputInfoManager::addedDevice);
++    connect(d_ptr, &QInputInfoManagerPrivate::deviceRemoved,this,&QInputInfoManager::removedDevice);
++
++    connect(d_ptr,SIGNAL(ready()),this,SLOT(privateReady()));
++
++}
++
++/*!
++    Destroy the QSensorGestureManager
++*/
++QInputInfoManager::~QInputInfoManager()
++{
++}
++/*!
++    \fn QInputInfoManager::ready()
++
++    This signal is emitted when input device map and associated properties are ready to use.
++*/
++/*!
++    \fn QInputInfoManager::deviceAdded(QInputDevice *inputDevice)
++
++    This signal is emitted when a new input device is added.
++*/
++/*!
++    \fn QInputInfoManager::deviceRemoved(const QString &deviceId)
++
++    This signal is emitted when a new input device is removed.
++*/
++
++/*
++    \internal
++ */
++void QInputInfoManager::privateReady()
++{
++    setFilter(currentFilter);
++    Q_EMIT ready();
++}
++
++/*
++    Returns a QMap of input devices using the currently set QInputDevice::InputTypeFlags filter.
++ */
++QMap <QString, QInputDevice *> QInputInfoManager::deviceMap()
++{
++    return currentFilteredMap;
++}
++
++/*
++    \internal
++ */
++void QInputInfoManager::addedDevice(QInputDevice *deviceInfo)
++{
++    Q_UNUSED(deviceInfo);
++    int oldFilteredCount = filteredCount;
++
++    setFilter(currentFilter);
++
++    if (oldFilteredCount < filteredCount) {
++        Q_EMIT deviceAdded(deviceInfo);
++    }
++}
++
++/*
++    \internal
++ */
++void QInputInfoManager::removedDevice(const QString &deviceId)
++{
++    bool ok = false;
++    if (currentFilteredMap.contains(deviceId))
++        ok = true;
++    setFilter(currentFilter);
++    if (ok) {
++        Q_EMIT deviceRemoved(deviceId);
++    }
++}
++
++/*
++    Returns the number of input devices with the currently set QInputDevice::InputTypeFlags filter,
++    if no filter is set, this returns number of all available input devices.
++ */
++int QInputInfoManager::count() const
++{
++    int deviceCount = 0;
++    if (currentFilter.testFlag(QInputDevice::Button)) {
++        deviceCount += count(static_cast< QInputDevice::InputType >(QInputDevice::Button));
++    }
++    if (currentFilter.testFlag(QInputDevice::Mouse)) {
++        deviceCount += count(static_cast< QInputDevice::InputType >(QInputDevice::Mouse));
++    }
++    if (currentFilter.testFlag(QInputDevice::TouchPad)) {
++        deviceCount += count(static_cast< QInputDevice::InputType >(QInputDevice::TouchPad));
++    }
++    if (currentFilter.testFlag(QInputDevice::TouchScreen)) {
++        deviceCount += count(static_cast< QInputDevice::InputType >(QInputDevice::TouchScreen));
++    }
++    if (currentFilter.testFlag(QInputDevice::Keyboard)) {
++        deviceCount += count(static_cast< QInputDevice::InputType >(QInputDevice::Keyboard));
++    }
++    if (currentFilter.testFlag(QInputDevice::Switch)) {
++        deviceCount += count(static_cast< QInputDevice::InputType >(QInputDevice::Switch));
++    }
++    return deviceCount;
++}
++
++/*
++    \property QInputInfoManager::count
++    \brief The number of input devices of the type filter.
++
++    Returns the number of input devices of the type \a filter, regardless of the filter
++    that is currently set.
++ */
++/*!
++    \fn QInputInfoManager::countChanged(int count)
++
++    This signal is emitted when the count of devices in regards to the current filter changes.
++*/
++
++int QInputInfoManager::count(const QInputDevice::InputType filter) const
++{
++    int dList = 0;
++    QMapIterator<QString, QInputDevice *> i(d_ptr->deviceMap);
++    while (i.hasNext()) {
++        i.next();
++        if (i.value()->types().testFlag(filter)) {
++            dList++;
++        }
++    }
++    return dList;
++}
++
++/*
++    \property QInputInfoManager::filter
++    \brief The currently set filter.
++
++    Returns the currently set device filter.
++    If none is set, default filter includes all QInputDevice::InputType
++ */
++
++/*!
++    \fn QInputInfoManager::filterChanged(QInputDevice::InputTypeFlags filterFlags)
++
++    This signal is emitted when the filter property changes.
++*/
++
++QInputDevice::InputTypeFlags QInputInfoManager::filter()
++{
++    return currentFilter;
++}
++
++/*
++ * Sets the current input device filter to \a filter, and updates device map.
++ *
++ * \sa deviceMap()
++ */
++void QInputInfoManager::setFilter(QInputDevice::InputTypeFlags filter)
++{
++    currentFilteredMap.clear();
++    if (!filter) {
++        filter = filter & (QInputDevice::Button | QInputDevice::Mouse
++                | QInputDevice::TouchPad | QInputDevice::TouchScreen
++                | QInputDevice::Keyboard | QInputDevice::Switch);
++    }
++    QMapIterator<QString, QInputDevice *> i(d_ptr->deviceMap);
++    while (i.hasNext()) {
++        i.next();
++
++        if (filter.testFlag(QInputDevice::Button)
++                && i.value()->types().testFlag(QInputDevice::Button)) {
++            currentFilteredMap.insert(i.key(),i.value());
++        }
++        if (filter.testFlag(QInputDevice::Mouse)
++                && i.value()->types().testFlag(QInputDevice::Mouse)) {
++            currentFilteredMap.insert(i.key(),i.value());
++        }
++        if (filter.testFlag(QInputDevice::TouchPad)
++                && i.value()->types().testFlag(QInputDevice::TouchPad)) {
++            currentFilteredMap.insert(i.key(),i.value());
++        }
++        if (filter.testFlag(QInputDevice::TouchScreen)
++                && i.value()->types().testFlag(QInputDevice::TouchScreen)) {
++            currentFilteredMap.insert(i.key(),i.value());
++        }
++        if (filter.testFlag(QInputDevice::Keyboard)
++                && i.value()->types().testFlag(QInputDevice::Keyboard)) {
++            currentFilteredMap.insert(i.key(),i.value());
++        }
++        if (filter.testFlag(QInputDevice::Switch)
++                && i.value()->types().testFlag(QInputDevice::Switch)) {
++            currentFilteredMap.insert(i.key(),i.value());
++        }
++    }
++
++    if (filter != currentFilter) {
++        currentFilter = filter;
++        Q_EMIT filterChanged(filter);
++    }
++
++    if (currentFilteredMap.count() != filteredCount) {
++        filteredCount = currentFilteredMap.count();
++        Q_EMIT countChanged(filteredCount);
++    }
++}
++
++/*
++    \property QInputInfoManager::lastAdded
++    \brief The last added input device.
++
++    Returns the last added input device.
++ */
++QInputDevice *QInputInfoManager::lastAdded()
++{
++   return currentFilteredMap.last();
++}
++
++QT_END_NAMESPACE
+diff --git a/src/systeminfo/qinputinfo.h b/src/systeminfo/qinputinfo.h
+new file mode 100644
+index 0000000..60d694a
+--- /dev/null
++++ b/src/systeminfo/qinputinfo.h
+@@ -0,0 +1,182 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#ifndef QINPUTINFO_H
++#define QINPUTINFO_H
++
++#include "qsysteminfoglobal.h"
++#include <QObject>
++#include <QVector>
++#include <QMap>
++#include <QSocketNotifier>
++#include <QDebug>
++#include <QtCore/qglobal.h>
++
++QT_BEGIN_NAMESPACE
++
++class QInputInfoManagerPrivate;
++class QInputDevicePrivate;
++class QInputDevice;
++
++class QInputInfoManager;
++
++#ifndef QT_NO_MIR
++class QInputInfoManagerMir;
++#endif
++#ifndef QT_NO_UDEV
++class QInputInfoManagerUdev;
++#endif
++
++class Q_SYSTEMINFO_EXPORT QInputDevice : public QObject
++{
++    Q_OBJECT
++
++    Q_PROPERTY(QVariantMap properties READ properties CONSTANT)
++    Q_PROPERTY(QInputDevice::InputTypeFlags types READ types CONSTANT)
++
++public:
++
++    enum InputType {
++        UnknownType = 0,
++        Button = 1,
++        Mouse = 2,
++        TouchPad = 4,
++        TouchScreen = 8,
++        Keyboard = 16,
++        Switch = 32
++    };
++    Q_ENUMS(InputType)
++
++    Q_DECLARE_FLAGS(InputTypeFlags, InputType)
++    Q_FLAGS(InputTypeFlags)
++
++    explicit QInputDevice(QObject *parent = Q_NULLPTR);
++    QString name() const;
++    QString identifier() const;
++    QList <int> buttons() const; //keys event code
++    QList <int> switches() const;
++    QList <int> relativeAxes() const;
++    QList <int> absoluteAxes() const;
++    QInputDevice::InputTypeFlags types() const;
++    /*
++     * name
++     * identifier
++     * buttons
++     * switches
++     * rAxes
++     * xAxes
++     * types
++     * */
++    QVariantMap properties();
++
++private:
++
++    QInputDevicePrivate *d_ptr;
++
++    friend class QInputDeviceManagerPrivate;
++#ifndef QT_NO_MIR
++    friend class QInputInfoManagerMir;
++#endif
++#ifndef QT_NO_UDEV
++    friend class QInputInfoManagerUdev;
++#endif
++    void setName(const QString &);
++    void setIdentifier(const QString &);
++    void addButton(int);
++    void addSwitch(int);
++    void addRelativeAxis(int);
++    void addAbsoluteAxis(int);
++    void setTypes(QInputDevice::InputTypeFlags flags);
++    QVariantMap deviceProperties;
++
++};
++
++class Q_SYSTEMINFO_EXPORT QInputInfoManager : public QObject
++{
++    Q_OBJECT
++
++    Q_PROPERTY(int count READ count NOTIFY countChanged)
++    Q_PROPERTY(QInputDevice::InputTypeFlags filter READ filter WRITE setFilter NOTIFY filterChanged)
++    Q_PROPERTY(QInputDevice * lastAdded READ lastAdded NOTIFY deviceAdded)
++
++public:
++
++    explicit QInputInfoManager(QObject *parent = Q_NULLPTR);
++    ~QInputInfoManager();
++
++    int count() const;
++    int count(const QInputDevice::InputType filter) const;
++
++    void setFilter(QInputDevice::InputTypeFlags filterFlags);
++    QInputDevice::InputTypeFlags filter();
++
++    QMap <QString, QInputDevice *> deviceMap();
++    QInputDevice *lastAdded();
++
++Q_SIGNALS:
++
++    void ready();
++    void deviceAdded(QInputDevice *inputDevice);
++    void deviceRemoved(const QString &deviceId);
++
++    void countChanged(int count);
++    void filterChanged(QInputDevice::InputTypeFlags filterFlags);
++
++private Q_SLOTS:
++    void addedDevice(QInputDevice *devicePath);
++    void removedDevice(const QString &deviceId);
++
++private:
++
++    Q_DISABLE_COPY(QInputInfoManager)
++#if !defined(QT_SIMULATOR)
++    QInputInfoManagerPrivate *const d_ptr;
++    Q_DECLARE_PRIVATE(QInputInfoManager)
++#endif
++    QInputDevice::InputTypeFlags currentFilter;
++    QMap <QString, QInputDevice *> currentFilteredMap;
++    int filteredCount;
++
++private Q_SLOTS:
++    void privateReady();
++};
++
++
++QT_END_NAMESPACE
++
++Q_DECLARE_METATYPE(QT_PREPEND_NAMESPACE(QInputDevice::InputType))
++Q_DECLARE_METATYPE(QT_PREPEND_NAMESPACE(QInputDevice::InputTypeFlags))
++Q_DECLARE_OPERATORS_FOR_FLAGS(QT_PREPEND_NAMESPACE(QInputDevice::InputTypeFlags))
++
++#endif // QINPUTINFO_H
+diff --git a/src/systeminfo/qnetworkinfo.h b/src/systeminfo/qnetworkinfo.h
+index b2904db..2430caf 100644
+--- a/src/systeminfo/qnetworkinfo.h
++++ b/src/systeminfo/qnetworkinfo.h
+@@ -34,7 +34,7 @@
+ #ifndef QNETWORKINFO_H
+ #define QNETWORKINFO_H
+ 
+-#include <QtSystemInfo/qsysteminfoglobal.h>
++#include "qsysteminfoglobal.h"
+ #include <QtCore/qobject.h>
+ #include <QtNetwork/qnetworkinterface.h>
+ 
+diff --git a/src/systeminfo/qscreensaver.h b/src/systeminfo/qscreensaver.h
+index acf371c..1b365e4 100644
+--- a/src/systeminfo/qscreensaver.h
++++ b/src/systeminfo/qscreensaver.h
+@@ -34,7 +34,7 @@
+ #ifndef QSCREENSAVER_H
+ #define QSCREENSAVER_H
+ 
+-#include <QtSystemInfo/qsysteminfoglobal.h>
++#include "qsysteminfoglobal.h"
+ #include <QtCore/qobject.h>
+ 
+ QT_BEGIN_NAMESPACE
+diff --git a/src/systeminfo/systeminfo.pro b/src/systeminfo/systeminfo.pro
+index e382c5c..de42379 100644
+--- a/src/systeminfo/systeminfo.pro
++++ b/src/systeminfo/systeminfo.pro
+@@ -52,16 +52,21 @@ win32: !simulator: {
+   win32-g++: {
+         LIBS += -luser32 -lgdi32
+     }
+-
+ }
+ 
+ linux-*: !simulator: {
+     PRIVATE_HEADERS += linux/qdeviceinfo_linux_p.h \
+                        linux/qnetworkinfo_linux_p.h
+ 
++    SOURCES += \
++           qinputinfo.cpp \
++           linux/qdeviceinfo_linux.cpp \
++           linux/qnetworkinfo_linux.cpp \
++           linux/qinputinfomanager.cpp
++   HEADERS += \
++         qinputinfo.h \
++         linux/qinputinfomanager_p.h
+ 
+-    SOURCES += linux/qdeviceinfo_linux.cpp \
+-               linux/qnetworkinfo_linux.cpp
+     contains(QT_CONFIG, mirclient) {
+         DEFINES += QT_UNITY8
+         PRIVATE_HEADERS += linux/qscreensaver_mir_p.h
+@@ -122,12 +127,32 @@ linux-*: !simulator: {
+         SOURCES += linux/qbatteryinfo_linux.cpp
+     }
+ 
++    config_mir {
++        QT += gui gui-private
++        CONFIG += link_pkgconfig
++        PKGCONFIG += mirclient
++        LIBS += -lmirclient
++        SOURCES += linux/qinputinfomanagermir.cpp
++        PRIVATE_HEADERS += linux/qinputinfomanagermir_p.h
++    } else {
++        DEFINES += QT_NO_MIR
++    }
++
+     config_udev {
+         CONFIG += link_pkgconfig
+         PKGCONFIG += udev
+         LIBS += -ludev
+-        PRIVATE_HEADERS += linux/qudevwrapper_p.h
+-        SOURCES += linux/qudevwrapper.cpp
++
++        config_evdev {
++            PKGCONFIG += libevdev
++            LIBS +=  -levdev
++        } else {
++            DEFINES += QT_NO_EVDEV
++        }
++        PRIVATE_HEADERS += linux/qudevwrapper_p.h \
++            linux/qinputinfomanagerudev_p.h
++        SOURCES += linux/qudevwrapper.cpp \
++                   linux/qinputinfomanagerudev.cpp
+     } else {
+         DEFINES += QT_NO_UDEV
+     }
+@@ -216,12 +241,15 @@ simulator {
+             DEFINES += QT_NO_OFONO QT_NO_UDISKS
+         }
+ 
++        DEFINES += QT_NO_MIR
++
+         config_udev {
+             CONFIG += link_pkgconfig
+             PKGCONFIG += udev
+             LIBS += -ludev
+             PRIVATE_HEADERS += linux/qudevwrapper_p.h
+-            SOURCES += linux/qudevwrapper.cpp
++            SOURCES += linux/qudevwrapper.cpp \
++                       linux/qinputdeviceinfo_udev.cpp
+         } else {
+             DEFINES += QT_NO_UDEV
+         }
+@@ -240,3 +268,6 @@ config_bluez {
+     }
+ }
+ 
++OTHER_FILES += \
++    notes.txt
++
+diff --git a/tests/auto/systeminfo/qinputdeviceinfo/qinputdeviceinfo.pro b/tests/auto/systeminfo/qinputdeviceinfo/qinputdeviceinfo.pro
+new file mode 100644
+index 0000000..9de4d5a
+--- /dev/null
++++ b/tests/auto/systeminfo/qinputdeviceinfo/qinputdeviceinfo.pro
+@@ -0,0 +1,6 @@
++
++QT += systeminfo testlib
++TARGET = tst_qinputdeviceinfo
++SOURCES += tst_qinputdeviceinfo.cpp
++DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
++
+diff --git a/tests/auto/systeminfo/qinputdeviceinfo/tst_qinputdeviceinfo.cpp b/tests/auto/systeminfo/qinputdeviceinfo/tst_qinputdeviceinfo.cpp
+new file mode 100644
+index 0000000..6d616cd
+--- /dev/null
++++ b/tests/auto/systeminfo/qinputdeviceinfo/tst_qinputdeviceinfo.cpp
+@@ -0,0 +1,143 @@
++/****************************************************************************
++**
++** Copyright (C) 2016 Canonical, Ltd. and/or its subsidiary(-ies).
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include <QtTest/qtest.h>
++#include <QSignalSpy>
++
++#include "qinputinfo.h"
++
++QT_USE_NAMESPACE
++
++class tst_QInputDeviceInfo : public QObject
++{
++    Q_OBJECT
++
++private slots:
++    void initTestCase();
++    void tst_deviceMap();
++    void tst_deviceFilter();
++    void tst_signals();
++};
++
++void tst_QInputDeviceInfo::initTestCase()
++{
++    qRegisterMetaType<QInputDevice::InputType>();
++    qRegisterMetaType<QInputDevice::InputTypeFlags>();
++}
++
++void tst_QInputDeviceInfo::tst_deviceMap()
++{
++    QInputInfoManager manager;
++    QSignalSpy spy(&manager, SIGNAL(ready()));
++    QTRY_COMPARE(spy.count(), 1);
++
++    QMap <QString, QInputDevice *> map = manager.deviceMap();
++    QVERIFY(map.count() > 0);
++    QMapIterator<QString, QInputDevice *> i(map);
++    while (i.hasNext()) {
++        i.next();
++        QVERIFY(!i.value()->name().isEmpty());
++        QVERIFY(!i.value()->identifier().isEmpty());
++        QVERIFY(!i.value()->properties().value("name").toString().isEmpty());
++        QVERIFY(!i.value()->properties().value("identifier").toString().isEmpty());
++
++        QVERIFY(i.value()->name() == i.value()->properties().value("name"));
++        QVERIFY(i.value()->identifier() == i.value()->properties().value("identifier"));
++        QVERIFY(!i.value()->types().testFlag(QInputDevice::UnknownType));
++    }
++}
++
++void tst_QInputDeviceInfo::tst_deviceFilter()
++{
++    QInputInfoManager manager;
++    QVERIFY(manager.filter().testFlag(QInputDevice::Keyboard)
++            && manager.filter().testFlag(QInputDevice::Button)
++            && manager.filter().testFlag(QInputDevice::Mouse)
++            && manager.filter().testFlag(QInputDevice::TouchPad)
++            && manager.filter().testFlag(QInputDevice::TouchScreen)
++            && manager.filter().testFlag(QInputDevice::Switch));
++    int mouseCount = manager.count(QInputDevice::Mouse);
++    int keyboardCount = manager.count(QInputDevice::Keyboard);
++
++    manager.setFilter(QInputDevice::Keyboard);
++    QVERIFY(manager.filter().testFlag(QInputDevice::Keyboard));
++
++    QVERIFY(!manager.filter().testFlag(QInputDevice::Button));
++    QVERIFY(!manager.filter().testFlag(QInputDevice::Mouse));
++    QVERIFY(!manager.filter().testFlag(QInputDevice::TouchPad));
++    QVERIFY(!manager.filter().testFlag(QInputDevice::TouchScreen));
++    QVERIFY(!manager.filter().testFlag(QInputDevice::Switch));
++
++    QSignalSpy spy(&manager, SIGNAL(filterChanged(QInputDevice::InputTypeFlags)));
++    QVERIFY(spy.isValid());
++    manager.setFilter(QInputDevice::Mouse);
++    QTRY_COMPARE(spy.count(), 1);
++    QCOMPARE(manager.filter(),QInputDevice::Mouse);
++    QList<QVariant> arguments = spy.takeFirst();
++
++    manager.setFilter(QInputDevice::Mouse | QInputDevice::Keyboard);
++    QTRY_COMPARE(spy.count(), 1);
++
++    QVERIFY(manager.count() == mouseCount + keyboardCount);
++    QVERIFY(manager.count(QInputDevice::Mouse) == mouseCount);
++
++    manager.setFilter(QInputDevice::TouchScreen);
++    QCOMPARE(manager.count(QInputDevice::Mouse), 1);
++
++
++}
++
++void tst_QInputDeviceInfo::tst_signals()
++{
++    QInputInfoManager manager;
++
++    QSignalSpy spy(&manager, SIGNAL(filterChanged(QInputDevice::InputTypeFlags)));
++    QVERIFY(spy.isValid());
++
++    QSignalSpy readyspy(&manager, SIGNAL(ready()));
++    QVERIFY(readyspy.isValid());
++
++    QSignalSpy deviceAddedSpy(&manager, SIGNAL(deviceAdded(QInputDevice *)));
++    QVERIFY(deviceAddedSpy.isValid());
++
++    QSignalSpy deviceRemovedSpy(&manager, SIGNAL(deviceRemoved(const QString &)));
++    QVERIFY(deviceRemovedSpy.isValid());
++
++    QSignalSpy countChangedSpy(&manager, SIGNAL(countChanged(int)));
++    QVERIFY(countChangedSpy.isValid());
++}
++
++
++QTEST_MAIN(tst_QInputDeviceInfo)
++#include "tst_qinputdeviceinfo.moc"
+diff --git a/tests/auto/systeminfo/systeminfo.pro b/tests/auto/systeminfo/systeminfo.pro
+index e75e01a..b5bf680 100644
+--- a/tests/auto/systeminfo/systeminfo.pro
++++ b/tests/auto/systeminfo/systeminfo.pro
+@@ -4,3 +4,8 @@ SUBDIRS = \
+     qdeviceinfo \
+     qscreensaver \
+     qbatteryinfo
++
++linux-*: !simulator: {
++    SUBDIRS += \
++    qinputdeviceinfo
++}
+diff --git a/tests/manual/sysinfo-tester/main.cpp b/tests/manual/sysinfo-tester/main.cpp
+index ccc80ac..45a3535 100644
+--- a/tests/manual/sysinfo-tester/main.cpp
++++ b/tests/manual/sysinfo-tester/main.cpp
+@@ -40,7 +40,7 @@
+ #include "qbatteryinfo.h"
+ #include "qdeviceinfo.h"
+ #include "qnetworkinfo.h"
+-//#include "qscreensaverinfo.h"
++#include "qinputinfo.h"
+ 
+ 
+ #define X(expr) qDebug() << #expr << "->" << (expr);
+@@ -291,6 +291,22 @@ static void test_batteryinfo(void)
+     X(batInfo.health());
+ }
+ 
++/* ------------------------------------------------------------------------- *
++ * test_systeminputdeviceinfo
++ * ------------------------------------------------------------------------- */
++
++static void test_inputinfo(void)
++{
++    QInputInfoManager manager;
++    QMap <QString, QInputDevice *> map = manager.deviceMap();
++    X(map.count());
++    QMapIterator<QString, QInputDevice *> i(map);
++    while (i.hasNext()) {
++        i.next();
++        X(i.value()->name());
++        X(i.value()->types());
++    }
++}
+ 
+ struct dummy_t
+ {
+@@ -303,6 +319,7 @@ struct dummy_t
+   ADD(networkinfo),
+ //  ADD(screensaver),
+   ADD(batteryinfo),
++  ADD(inputinfo),
+ #undef ADD
+   {0,0}
+ };
+diff --git a/tests/manual/sysinfo-tester/sysinfo-tester.pro b/tests/manual/sysinfo-tester/sysinfo-tester.pro
+index 3e07c71..de8278f 100644
+--- a/tests/manual/sysinfo-tester/sysinfo-tester.pro
++++ b/tests/manual/sysinfo-tester/sysinfo-tester.pro
+@@ -2,6 +2,6 @@ TARGET = sysinfo_tester
+ QT += core network systeminfo
+ 
+ SOURCES  += main.cpp
+-
++INCLUDEPATH=../../../src/systeminfo
+ CONFIG += console
+ 
+diff --git a/tests/tests.pro b/tests/tests.pro
+index 4e4aaee..6fb73cc 100644
+--- a/tests/tests.pro
++++ b/tests/tests.pro
+@@ -1,4 +1,6 @@
+ TEMPLATE = subdirs
+ SUBDIRS += auto
+-!macx:SUBDIRS += manual/sysinfo-tester
+ 
++linux-*: !simulator: {
++  SUBDIRS += manual/sysinfo-tester
++}
+-- 
+2.8.1
+

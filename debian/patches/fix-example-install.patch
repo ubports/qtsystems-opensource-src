@@ -1,0 +1,29 @@
+From 434af789f0d56ca7a521ca2d9ec8cf3b1057fd37 Mon Sep 17 00:00:00 2001
+From: Oswald Buddenhagen <oswald.buddenhagen@theqtcompany.com>
+Date: Wed, 25 May 2016 12:43:00 +0200
+Subject: [PATCH] fix example install
+
+Change-Id: I7cf8682f0d8129ed83c8b61254d076b541189ce2
+Reviewed-by: Joerg Bornemann <joerg.bornemann@qt.io>
+---
+ examples/systeminfo/qml-battery/qml-battery.pro | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/examples/systeminfo/qml-battery/qml-battery.pro b/examples/systeminfo/qml-battery/qml-battery.pro
+index 0a3d2cc..e9e3700 100644
+--- a/examples/systeminfo/qml-battery/qml-battery.pro
++++ b/examples/systeminfo/qml-battery/qml-battery.pro
+@@ -6,8 +6,8 @@ SOURCES = main.cpp
+ app.files = \
+     $$files(*.qml) \
+ 
+-target.path = $$[QT_INSTALL_EXAMPLES]/sysinfo/qml-battery
+-app.path = $$[QT_INSTALL_EXAMPLES]/sysinfo/qml-battery
++target.path = $$[QT_INSTALL_EXAMPLES]/systeminfo/qml-battery
++app.path = $$[QT_INSTALL_EXAMPLES]/systeminfo/qml-battery
+ INSTALLS += target app
+ 
+ RESOURCES += \
+-- 
+2.7.4
+

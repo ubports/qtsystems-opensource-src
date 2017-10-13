@@ -1,0 +1,209 @@
+From 83350a0407bcd1c5d03148cd18de3ef223cffdac Mon Sep 17 00:00:00 2001
+From: Lorn Potter <lorn.potter@canonical.com>
+Date: Fri, 26 Aug 2016 06:44:12 +1000
+Subject: [PATCH] Fix crash on mir based systems
+
+resolves the startup seg fault in non-gui applications.. and the lack
+of noitifications on startup..
+
+Change-Id: I2be4c8cba3b1b669322fb3f7ba9216a0894f286c
+---
+ src/systeminfo/linux/qinputinfomanagermir.cpp | 44 +++++++++++++++------------
+ src/systeminfo/linux/qinputinfomanagermir_p.h | 10 ++++--
+ src/systeminfo/linux/qscreensaver_mir_p.h     |  1 +
+ src/systeminfo/qinputinfo.cpp                 | 30 +++++++++++++++---
+ src/systeminfo/systeminfo.pro                 |  2 +-
+ 5 files changed, 61 insertions(+), 26 deletions(-)
+
+diff --git a/src/systeminfo/linux/qinputinfomanagermir.cpp b/src/systeminfo/linux/qinputinfomanagermir.cpp
+index f86a35f..790b45a 100644
+--- a/src/systeminfo/linux/qinputinfomanagermir.cpp
++++ b/src/systeminfo/linux/qinputinfomanagermir.cpp
+@@ -34,14 +34,28 @@
+ 
+ #include "qinputinfomanagermir_p.h"
+ #include "linux/input-event-codes.h"
++#include <QTimer>
+ 
+-QInputInfoManagerMir::QInputInfoManagerMir(MirConnection *con, QObject *parent)
+-    : QInputInfoManagerPrivate(parent), connection{con}, config{mir_connection_create_input_config(con), mir_input_config_destroy}
++static void no_input_config_yet(MirInputConfig const*) {}
++
++QInputInfoManagerMir::QInputInfoManagerMir(MirConnectionPtr con, QObject *parent)
++    : QInputInfoManagerPrivate(parent), connection{std::move(con)}, config{nullptr, &no_input_config_yet}
++{
++    if (connection && mir_connection_is_valid(connection.get()))
++        QTimer::singleShot(250,this,SLOT(init()));
++}
++
++QInputInfoManagerMir::~QInputInfoManagerMir()
++{
++}
++
++void QInputInfoManagerMir::init()
+ {
++    config = MirInputConfigPtr{mir_connection_create_input_config(connection.get()), mir_input_config_destroy};
++
+     mir_connection_set_input_config_change_callback(
+-        connection,
+-        [](MirConnection* con, void* context)
+-        {
++        connection.get(),
++        [](MirConnection* con, void* context) {
+             QInputInfoManagerMir *this_ = static_cast<QInputInfoManagerMir*>(context);
+             this_->config = MirInputConfigPtr{mir_connection_create_input_config(con), mir_input_config_destroy};
+             this_->update_devices();
+@@ -76,12 +90,9 @@ void QInputInfoManagerMir::update_devices()
+                 nDevice->addButton(BTN_MOUSE);
+                 nDevice->addButton(BTN_RIGHT);
+                 nDevice->addButton(BTN_MIDDLE);
+-                if (caps & mir_input_device_capability_touchpad)
+-                {
++                if (caps & mir_input_device_capability_touchpad) {
+                     flags |= QInputDevice::TouchPad;
+-                }
+-                else
+-                {
++                } else {
+                     flags |= QInputDevice::Mouse;
+                     nDevice->addButton(BTN_SIDE);
+                     nDevice->addButton(BTN_EXTRA);
+@@ -91,13 +102,11 @@ void QInputInfoManagerMir::update_devices()
+                 }
+             }
+ 
+-            if (caps & mir_input_device_capability_keyboard)
+-            {
++            if (caps & mir_input_device_capability_keyboard) {
+                 flags |= QInputDevice::Button;
+ 
+                 // keyboard with enough keys for text entry
+-                if (caps & mir_input_device_capability_alpha_numeric)
+-                {
++                if (caps & mir_input_device_capability_alpha_numeric) {
+                     flags |= QInputDevice::Keyboard;
+                     for (int i = KEY_1; i != KEY_SLASH; ++i)
+                         nDevice->addButton(i);
+@@ -110,16 +119,13 @@ void QInputInfoManagerMir::update_devices()
+             deviceList.push_back(nDevice);
+ 
+             Q_EMIT deviceAdded(nDevice);
+-        }
+-        else
+-        {
++        } else {
+             deletedDevices.removeOne(id);
+         }
+     }
+ 
+     for (QList<QString>::const_iterator it = deletedDevices.begin(), e = deletedDevices.end();
+-         it != e ; ++it)
+-    {
++         it != e ; ++it) {
+         QInputDevice * device = deviceMap.take(*it);
+         deviceList.removeOne(device);
+         Q_EMIT deviceRemoved(*it);
+diff --git a/src/systeminfo/linux/qinputinfomanagermir_p.h b/src/systeminfo/linux/qinputinfomanagermir_p.h
+index 1090412..2ce18f5 100644
+--- a/src/systeminfo/linux/qinputinfomanagermir_p.h
++++ b/src/systeminfo/linux/qinputinfomanagermir_p.h
+@@ -45,14 +45,20 @@ QT_BEGIN_NAMESPACE
+ 
+ class QInputInfoManagerMir : public QInputInfoManagerPrivate
+ {
++    Q_OBJECT
+ public:
+-    QInputInfoManagerMir(MirConnection *con, QObject *parent = NULL);
++    using MirConnectionPtr = std::unique_ptr<MirConnection,void (*)(MirConnection*)>;
++    explicit QInputInfoManagerMir(MirConnectionPtr connection, QObject *parent = NULL);
++    ~QInputInfoManagerMir();
+ 
+ private:
+     void update_devices();
+-    MirConnection *connection;
++    MirConnectionPtr connection;
+     using MirInputConfigPtr = std::unique_ptr<MirInputConfig const,void (*)(MirInputConfig const*)>;
+     MirInputConfigPtr config;
++
++private Q_SLOTS:
++    void init();
+ };
+ 
+ QT_END_NAMESPACE
+diff --git a/src/systeminfo/linux/qscreensaver_mir_p.h b/src/systeminfo/linux/qscreensaver_mir_p.h
+index ba8ee65..34e01b6 100644
+--- a/src/systeminfo/linux/qscreensaver_mir_p.h
++++ b/src/systeminfo/linux/qscreensaver_mir_p.h
+@@ -46,6 +46,7 @@
+ #define QSCREENSAVER_MIR_P_H
+ 
+ #include <qscreensaver.h>
++#include <QDBusInterface>
+ 
+ QT_BEGIN_NAMESPACE
+ 
+diff --git a/src/systeminfo/qinputinfo.cpp b/src/systeminfo/qinputinfo.cpp
+index 4a68a18..a62ffba 100644
+--- a/src/systeminfo/qinputinfo.cpp
++++ b/src/systeminfo/qinputinfo.cpp
+@@ -51,9 +51,24 @@
+ Q_GLOBAL_STATIC(QInputInfoManagerUdev, inputDeviceManagerUdev)
+ #endif
+ #if !defined(QT_NO_MIR)
+-Q_GLOBAL_STATIC_WITH_ARGS(QInputInfoManagerMir,
+-                          inputDeviceManagerMir,
+-                          (static_cast<MirConnection*>(QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("mirconnection"))))
++static void not_owning_connection(MirConnection*) {}
++QInputInfoManagerMir::MirConnectionPtr attempt_to_connect_to_mir()
++{
++    auto nativeInterface = QGuiApplication::platformNativeInterface();
++
++    if (nativeInterface) {
++        auto connection = static_cast<MirConnection*>(nativeInterface->nativeResourceForIntegration("mirconnection"));
++        return QInputInfoManagerMir::MirConnectionPtr{connection, &not_owning_connection};
++    } else {
++        auto connection = mir_connect_sync(NULL, "qtsystems-plugin");
++        if (mir_connection_is_valid(connection))
++            return QInputInfoManagerMir::MirConnectionPtr{connection, &mir_connection_release};
++        else
++            return QInputInfoManagerMir::MirConnectionPtr{connection, &not_owning_connection};
++    }
++}
++
++Q_GLOBAL_STATIC_WITH_ARGS(QInputInfoManagerMir, inputDeviceManagerMir, (attempt_to_connect_to_mir()))
+ #endif
+ #endif
+ 
+@@ -65,8 +80,15 @@ QT_BEGIN_NAMESPACE
+ QInputInfoManagerPrivate * QInputInfoManagerPrivate::instance()
+ {
+ #ifndef QT_NO_MIR
+-    if (QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("mirconnection"))
++    if (inputDeviceManagerMir.exists()) {
+         return inputDeviceManagerMir();
++    } else {
++        auto connection_attempt = attempt_to_connect_to_mir();
++        if (connection_attempt && mir_connection_is_valid(connection_attempt.get())) {
++            connection_attempt.reset();
++            return inputDeviceManagerMir();
++        }
++    }
+ #endif
+ #ifndef QT_NO_UDEV
+     return inputDeviceManagerUdev();
+diff --git a/src/systeminfo/systeminfo.pro b/src/systeminfo/systeminfo.pro
+index de42379..254ae0e 100644
+--- a/src/systeminfo/systeminfo.pro
++++ b/src/systeminfo/systeminfo.pro
+@@ -67,7 +67,7 @@ linux-*: !simulator: {
+          qinputinfo.h \
+          linux/qinputinfomanager_p.h
+ 
+-    contains(QT_CONFIG, mirclient) {
++    config_mir {
+         DEFINES += QT_UNITY8
+         PRIVATE_HEADERS += linux/qscreensaver_mir_p.h
+         SOURCES += linux/qscreensaver_mir.cpp
+-- 
+2.9.3
+

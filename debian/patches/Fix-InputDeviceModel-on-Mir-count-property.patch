@@ -1,0 +1,59 @@
+From db48c2e63934d238855dcfcca2018db8f9dd7ed6 Mon Sep 17 00:00:00 2001
+From: Lorn Potter <lorn.potter@canonical.com>
+Date: Thu, 1 Dec 2016 04:40:39 +1000
+Subject: [PATCH] Fix InputDeviceModel on Mir count property
+
+The countChanged signal was being emitted
+before the model was changed, thus the count property was incorrect.
+
+Change-Id: I660bd6d92aa1e5872eed1133aa8e13981d903d0a
+---
+ src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp | 4 ++--
+ src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp b/src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp
+index 6a8fa52..52deb3c 100644
+--- a/src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp
++++ b/src/imports/systeminfo/qdeclarativeinputdevicemodel.cpp
+@@ -50,8 +50,6 @@ QDeclarativeInputDeviceModel::QDeclarativeInputDeviceModel(QObject *parent) :
+             this,&QDeclarativeInputDeviceModel::addedDevice);
+     connect(deviceInfoManager, &QInputInfoManager::deviceRemoved,
+             this,&QDeclarativeInputDeviceModel::removedDevice);
+-    connect(deviceInfoManager, &QInputInfoManager::countChanged,
+-            this,&QDeclarativeInputDeviceModel::countChanged);
+ }
+ 
+ QDeclarativeInputDeviceModel::~QDeclarativeInputDeviceModel()
+@@ -132,6 +130,7 @@ void QDeclarativeInputDeviceModel::updateDeviceList()
+             beginInsertRows(QModelIndex(), i, i);
+             inputDevices.insert(i, newDevices.value(i));
+             endInsertRows();
++            Q_EMIT countChanged();
+         } else if (i != j) {
+             // changed its position -> move it
+             QInputDevice* device = inputDevices.value(j);
+@@ -151,6 +150,7 @@ void QDeclarativeInputDeviceModel::updateDeviceList()
+         beginRemoveRows(QModelIndex(), numNew, numOld - 1);
+         inputDevices.remove(numNew, numOld - numNew);
+         endRemoveRows();
++        Q_EMIT countChanged();
+     }
+ }
+ 
+diff --git a/src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h b/src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h
+index 85c95a8..6b4d201 100644
+--- a/src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h
++++ b/src/imports/systeminfo/qdeclarativeinputdevicemodel_p.h
+@@ -78,7 +78,7 @@ Q_SIGNALS:
+     void added(QInputDevice *inputDevice);
+     void removed(const QString &deviceId);
+     void filterChanged(QInputDevice::InputTypeFlags filterFlags);
+-    void countChanged(int devices);
++    void countChanged();
+ 
+ public Q_SLOTS:
+     void updateDeviceList();
+-- 
+2.9.3
+

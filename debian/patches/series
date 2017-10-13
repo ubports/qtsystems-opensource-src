@@ -1,0 +1,9 @@
+build_with_udisk.patch
+skip_failing_tests.patch
+Add-support-for-disabling-enabling-the-screen-saver-.patch
+Fix-name-mismatch.patch
+Add-QInputDeviceInfo.patch
+fix-example-install.patch
+Fix-crash-on-mir-based-systems.patch
+Fix-InputDeviceModel-on-Mir-count-property.patch
+Don-t-crash-if-udev_monitor_new_from_netlink-fails.patch

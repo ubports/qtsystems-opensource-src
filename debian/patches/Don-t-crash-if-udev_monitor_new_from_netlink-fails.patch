@@ -1,0 +1,115 @@
+From 8cd4fe6f8eb9ae8bd841f0be7fb4f89647d7a55d Mon Sep 17 00:00:00 2001
+From: Albert Astals Cid <albert.astals@canonical.com>
+Date: Thu, 9 Feb 2017 10:57:31 +0100
+Subject: [PATCH] Don't crash if udev_monitor_new_from_netlink fails
+
+Change-Id: Ia5d17b3c2e2d6d12345678075a4e6085aace7b2a
+---
+ src/systeminfo/linux/qinputinfomanagerudev.cpp | 50 +++++++++++++-------------
+ src/systeminfo/linux/qnetworkinfo_linux.cpp    | 18 ++++++----
+ 2 files changed, 38 insertions(+), 30 deletions(-)
+
+diff --git a/src/systeminfo/linux/qinputinfomanagerudev.cpp b/src/systeminfo/linux/qinputinfomanagerudev.cpp
+index b40941e..e6a85d5 100644
+--- a/src/systeminfo/linux/qinputinfomanagerudev.cpp
++++ b/src/systeminfo/linux/qinputinfomanagerudev.cpp
+@@ -72,33 +72,35 @@ void QInputInfoManagerUdev::init()
+     if (udevice) {
+ 
+         udevMonitor = udev_monitor_new_from_netlink(udevice, "udev");
+-        udev_monitor_filter_add_match_subsystem_devtype(udevMonitor, subsystem.toLatin1(), NULL);
+-        enumerate = udev_enumerate_new(udevice);
+-        udev_enumerate_add_match_subsystem(enumerate, subsystem.toLatin1());
+-
+-        udev_monitor_enable_receiving(udevMonitor);
+-        notifierFd = udev_monitor_get_fd(udevMonitor);
+-
+-        notifier = new QSocketNotifier(notifierFd, QSocketNotifier::Read, this);
+-        connect(notifier, SIGNAL(activated(int)), this, SLOT(onUDevChanges()));
+-
+-        udev_enumerate_scan_devices(enumerate);
+-        devices = udev_enumerate_get_list_entry(enumerate);
+-
+-        udev_list_entry_foreach(dev_list_entry, devices) {
+-            const char *path;
+-            path = udev_list_entry_get_name(dev_list_entry);
+-
+-            dev = udev_device_new_from_syspath(udevice, path);
+-            if (qstrcmp(udev_device_get_subsystem(dev), "input") == 0 ) {
+-                QInputDevice *iDevice = addDevice(dev);
+-                if (iDevice && !iDevice->identifier().isEmpty()) {
+-                    deviceMap.insert(iDevice->identifier(),iDevice);
++        if (udevMonitor) {
++            udev_monitor_filter_add_match_subsystem_devtype(udevMonitor, subsystem.toLatin1(), NULL);
++            enumerate = udev_enumerate_new(udevice);
++            udev_enumerate_add_match_subsystem(enumerate, subsystem.toLatin1());
++
++            udev_monitor_enable_receiving(udevMonitor);
++            notifierFd = udev_monitor_get_fd(udevMonitor);
++
++            notifier = new QSocketNotifier(notifierFd, QSocketNotifier::Read, this);
++            connect(notifier, SIGNAL(activated(int)), this, SLOT(onUDevChanges()));
++
++            udev_enumerate_scan_devices(enumerate);
++            devices = udev_enumerate_get_list_entry(enumerate);
++
++            udev_list_entry_foreach(dev_list_entry, devices) {
++                const char *path;
++                path = udev_list_entry_get_name(dev_list_entry);
++
++                dev = udev_device_new_from_syspath(udevice, path);
++                if (qstrcmp(udev_device_get_subsystem(dev), "input") == 0 ) {
++                    QInputDevice *iDevice = addDevice(dev);
++                    if (iDevice && !iDevice->identifier().isEmpty()) {
++                        deviceMap.insert(iDevice->identifier(),iDevice);
++                    }
+                 }
++                udev_device_unref(dev);
+             }
+-            udev_device_unref(dev);
++            udev_enumerate_unref(enumerate);
+         }
+-        udev_enumerate_unref(enumerate);
+     }
+  //   udev_unref(udevice);
+     Q_FOREACH (const QString &devicePath, deviceMap.keys()) {
+diff --git a/src/systeminfo/linux/qnetworkinfo_linux.cpp b/src/systeminfo/linux/qnetworkinfo_linux.cpp
+index 6979f94..9a981ec 100644
+--- a/src/systeminfo/linux/qnetworkinfo_linux.cpp
++++ b/src/systeminfo/linux/qnetworkinfo_linux.cpp
+@@ -439,12 +439,16 @@ void QNetworkInfoPrivate::connectNotify(const QMetaMethod &signal)
+         if (!udevHandle) {
+             udevHandle = udev_new();
+             udevMonitor = udev_monitor_new_from_netlink(udevHandle, "udev");
+-            udev_monitor_filter_add_match_subsystem_devtype(udevMonitor, "net", NULL);
+-            udev_monitor_enable_receiving(udevMonitor);
+-            udevNotifier = new QSocketNotifier(udev_monitor_get_fd(udevMonitor), QSocketNotifier::Read, this);
+-            connect(udevNotifier, SIGNAL(activated(int)), this, SLOT(onUdevChanged()));
++            if (udevMonitor) {
++                udev_monitor_filter_add_match_subsystem_devtype(udevMonitor, "net", NULL);
++                udev_monitor_enable_receiving(udevMonitor);
++                udevNotifier = new QSocketNotifier(udev_monitor_get_fd(udevMonitor), QSocketNotifier::Read, this);
++                connect(udevNotifier, SIGNAL(activated(int)), this, SLOT(onUdevChanged()));
++            }
++        }
++        if (udevNotifier) {
++            udevNotifier->setEnabled(true);
+         }
+-        udevNotifier->setEnabled(true);
+ 
+ #endif // QT_NO_UDEV
+         watchNetworkInterfaceCount = true;
+@@ -538,7 +542,9 @@ void QNetworkInfoPrivate::disconnectNotify(const QMetaMethod &signal)
+     if (signal == networkInterfaceCountChangedSignal
+             && !watchNetworkStatus && !watchNetworkName && !watchNetworkSignalStrength ) {
+ #if !defined(QT_NO_UDEV)
+-        udevNotifier->setEnabled(false);
++        if (udevNotifier) {
++            udevNotifier->setEnabled(false);
++        }
+         watchNetworkInterfaceCount = false;
+         return;
+ #endif // QT_NO_UDEV
+-- 
+2.11.0
+

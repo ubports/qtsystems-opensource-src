@@ -1,0 +1,21 @@
+--- a/doc/src/systeminfo/systeminfo.qdoc
++++ b/doc/src/systeminfo/systeminfo.qdoc
+@@ -47,6 +47,7 @@
+ 
+      * CONFIG+=upower (linux) will build the UPower dbus backend.
+      * CONFIG+=ofono (linux) will build the Ofono dbus backend.
++     * CONFIG+=udisk (linux) will build the Udisk dbus backend.
+      * CONFIG+=nox11option (linux) Turns off the use of x11 in QScreenSaver (and screen blanking
+      disabling and enabling will not work)
+ 
+--- a/src/systeminfo/systeminfo.pro
++++ b/src/systeminfo/systeminfo.pro
+@@ -87,7 +87,7 @@
+             DEFINES += QT_NO_OFONO
+         }
+ 
+-        config_udisks {
++        contains(CONFIG,udisks): {
+             QT_PRIVATE += dbus
+         } else: {
+             DEFINES += QT_NO_UDISKS

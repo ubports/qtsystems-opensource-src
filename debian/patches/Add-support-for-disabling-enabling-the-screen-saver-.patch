@@ -1,0 +1,237 @@
+From 97066fb30fd1fb0fdcf4e4232b1292d4a944012e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Christian=20Str=C3=B8mme?=
+ <christian.stromme@theqtcompany.com>
+Date: Mon, 23 Nov 2015 13:58:15 +0100
+Subject: [PATCH] Add support for disabling/enabling the screen saver on
+ Mir/Ubuntu.
+
+This adds the implementation to disable the "screen saver" on Ubuntu
+devices that are using Mir. Note that this is a request only, and
+it's not possible to enable the screen saver/lock if it's already
+turned off by the user.
+
+Change-Id: I7ddb459688b5b8cc0f0606c469a95491e8288fdc
+Reviewed-by: Eskil Abrahamsen Blomfeldt <eskil.abrahamsen-blomfeldt@theqtcompany.com>
+Reviewed-by: aavit <eirik.aavitsland@theqtcompany.com>
+Reviewed-by: Lorn Potter <lorn.potter@gmail.com>
+---
+ src/systeminfo/linux/qscreensaver_mir.cpp | 72 +++++++++++++++++++++++++++++++
+ src/systeminfo/linux/qscreensaver_mir_p.h | 72 +++++++++++++++++++++++++++++++
+ src/systeminfo/qscreensaver.cpp           |  6 ++-
+ src/systeminfo/systeminfo.pro             | 16 ++++---
+ 4 files changed, 160 insertions(+), 6 deletions(-)
+ create mode 100644 src/systeminfo/linux/qscreensaver_mir.cpp
+ create mode 100644 src/systeminfo/linux/qscreensaver_mir_p.h
+
+diff --git a/src/systeminfo/linux/qscreensaver_mir.cpp b/src/systeminfo/linux/qscreensaver_mir.cpp
+new file mode 100644
+index 0000000..5b6beab
+--- /dev/null
++++ b/src/systeminfo/linux/qscreensaver_mir.cpp
+@@ -0,0 +1,72 @@
++/****************************************************************************
++**
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++#include "qscreensaver_mir_p.h"
++
++#include <QDBusConnection>
++#include <QDBusInterface>
++#include <QDBusPendingCall>
++
++QT_BEGIN_NAMESPACE
++
++QScreenSaverPrivate::QScreenSaverPrivate(QScreenSaver *parent)
++    : q_ptr(parent)
++    , m_keepDisplayOnRequestId(-1)
++    , m_iface("com.canonical.Unity.Screen", "/com/canonical/Unity/Screen", "com.canonical.Unity.Screen", QDBusConnection::systemBus())
++{
++}
++
++bool QScreenSaverPrivate::screenSaverEnabled()
++{
++    return m_keepDisplayOnRequestId == -1;
++}
++
++void QScreenSaverPrivate::setScreenSaverEnabled(bool enabled)
++{
++    if (!m_iface.isValid())
++        return;
++
++    if (m_keepDisplayOnRequestId == -1 && !enabled) {
++        // set request
++        QDBusMessage reply = m_iface.call("keepDisplayOn");
++        if (reply.arguments().count() > 0)
++            m_keepDisplayOnRequestId = reply.arguments().first().toInt();
++    } else if (m_keepDisplayOnRequestId != -1 && enabled) {
++        // clear request
++        m_iface.asyncCall("removeDisplayOnRequest", m_keepDisplayOnRequestId);
++        m_keepDisplayOnRequestId = -1;
++    }
++}
++
++QT_END_NAMESPACE
++
+diff --git a/src/systeminfo/linux/qscreensaver_mir_p.h b/src/systeminfo/linux/qscreensaver_mir_p.h
+new file mode 100644
+index 0000000..6162650
+--- /dev/null
++++ b/src/systeminfo/linux/qscreensaver_mir_p.h
+@@ -0,0 +1,72 @@
++/****************************************************************************
++**
++** Copyright (C) 2015 The Qt Company Ltd and/or its subsidiary(-ies).
++** Contact: http://www.qt-project.org/legal
++**
++** This file is part of the QtSystems module of the Qt Toolkit.
++**
++** $QT_BEGIN_LICENSE:LGPL21$
++** Commercial License Usage
++** Licensees holding valid commercial Qt licenses may use this file in
++** accordance with the commercial license agreement provided with the
++** Software or, alternatively, in accordance with the terms contained in
++** a written agreement between you and The Qt Company. For licensing terms
++** and conditions see http://www.qt.io/terms-conditions. For further
++** information use the contact form at http://www.qt.io/contact-us.
++**
++** GNU Lesser General Public License Usage
++** Alternatively, this file may be used under the terms of the GNU Lesser
++** General Public License version 2.1 or version 3 as published by the Free
++** Software Foundation and appearing in the file LICENSE.LGPLv21 and
++** LICENSE.LGPLv3 included in the packaging of this file. Please review the
++** following information to ensure the GNU Lesser General Public License
++** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
++** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
++**
++** As a special exception, The Qt Company gives you certain additional
++** rights. These rights are described in The Qt Company LGPL Exception
++** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
++**
++** $QT_END_LICENSE$
++**
++****************************************************************************/
++
++//
++//  W A R N I N G
++//  -------------
++//
++// This file is not part of the Qt API.  It exists purely as an
++// implementation detail.  This header file may change from version to
++// version without notice, or even be removed.
++//
++// We mean it.
++//
++
++#ifndef QSCREENSAVER_MIR_P_H
++#define QSCREENSAVER_MIR_P_H
++
++#include <qscreensaver.h>
++
++QT_BEGIN_NAMESPACE
++
++class QDBusInterface;
++
++class QScreenSaverPrivate
++{
++public:
++    QScreenSaverPrivate(QScreenSaver *parent);
++
++    bool screenSaverEnabled();
++    void setScreenSaverEnabled(bool enabled);
++
++private:
++    QScreenSaver * const q_ptr;
++    Q_DECLARE_PUBLIC(QScreenSaver)
++
++    int m_keepDisplayOnRequest;
++    QDBusInterface m_iface;
++};
++
++QT_END_NAMESPACE
++
++#endif // QSCREENSAVER_MIR_P_H
+diff --git a/src/systeminfo/qscreensaver.cpp b/src/systeminfo/qscreensaver.cpp
+index 98869fa..76c7483 100644
+--- a/src/systeminfo/qscreensaver.cpp
++++ b/src/systeminfo/qscreensaver.cpp
+@@ -34,7 +34,11 @@
+ #include "qscreensaver.h"
+ 
+ #if defined(Q_OS_LINUX)
+-#include "linux/qscreensaver_linux_p.h"
++#  if defined(QT_UNITY8)
++#    include "linux/qscreensaver_mir_p.h"
++#  else
++#    include "linux/qscreensaver_linux_p.h"
++#  endif
+ #elif defined(Q_OS_WIN)
+ #  include "windows/qscreensaver_win_p.h"
+ #elif defined(Q_OS_MAC)
+diff --git a/src/systeminfo/systeminfo.pro b/src/systeminfo/systeminfo.pro
+index 72990f3..e382c5c 100644
+--- a/src/systeminfo/systeminfo.pro
++++ b/src/systeminfo/systeminfo.pro
+@@ -57,12 +57,19 @@ win32: !simulator: {
+ 
+ linux-*: !simulator: {
+     PRIVATE_HEADERS += linux/qdeviceinfo_linux_p.h \
+-                       linux/qnetworkinfo_linux_p.h \
+-                       linux/qscreensaver_linux_p.h
++                       linux/qnetworkinfo_linux_p.h
++
+ 
+     SOURCES += linux/qdeviceinfo_linux.cpp \
+-               linux/qnetworkinfo_linux.cpp \
+-               linux/qscreensaver_linux.cpp
++               linux/qnetworkinfo_linux.cpp
++    contains(QT_CONFIG, mirclient) {
++        DEFINES += QT_UNITY8
++        PRIVATE_HEADERS += linux/qscreensaver_mir_p.h
++        SOURCES += linux/qscreensaver_mir.cpp
++    } else {
++        PRIVATE_HEADERS += linux/qscreensaver_linux_p.h
++        SOURCES += linux/qscreensaver_linux.cpp
++    }
+ 
+     x11|config_x11: !contains(CONFIG,nox11option) {
+         CONFIG += link_pkgconfig
+@@ -109,7 +116,6 @@ linux-*: !simulator: {
+             LIBS += -lssu
+             DEFINES += QT_USE_SSU
+         }
+-
+     } else {
+         DEFINES += QT_NO_OFONO QT_NO_UDISKS QT_NO_UPOWER
+         HEADERS += linux/qbatteryinfo_linux_p.h
+-- 
+2.8.1
+

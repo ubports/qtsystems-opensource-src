@@ -1,0 +1,30 @@
+From fe505ec48b5d14d3ef3f7f6345d56501f69697e8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Christian=20Str=C3=B8mme?=
+ <christian.stromme@theqtcompany.com>
+Date: Thu, 7 Jan 2016 14:32:17 +0100
+Subject: [PATCH] Fix name mismatch.
+
+This was not caught by the CI as the code is not built in the CI yet.
+
+Change-Id: I80609731276aba17898abc552d61cbce87aad088
+Reviewed-by: Eskil Abrahamsen Blomfeldt <eskil.abrahamsen-blomfeldt@theqtcompany.com>
+---
+ src/systeminfo/linux/qscreensaver_mir_p.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/systeminfo/linux/qscreensaver_mir_p.h b/src/systeminfo/linux/qscreensaver_mir_p.h
+index 6162650..ba8ee65 100644
+--- a/src/systeminfo/linux/qscreensaver_mir_p.h
++++ b/src/systeminfo/linux/qscreensaver_mir_p.h
+@@ -63,7 +63,7 @@ private:
+     QScreenSaver * const q_ptr;
+     Q_DECLARE_PUBLIC(QScreenSaver)
+ 
+-    int m_keepDisplayOnRequest;
++    int m_keepDisplayOnRequestId;
+     QDBusInterface m_iface;
+ };
+ 
+-- 
+2.9.3
+
