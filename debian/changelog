@@ -1,4 +1,4 @@
-qtsystems-opensource-src (5.0~git20141206~44f70d99-0ubuntu13~~xenialoverlay2~1) xenial; urgency=medium
+qtsystems-opensource-src (5.1-ubports) xenial; urgency=medium
 
   [ Albert Astals Cid ]
   * debian/patches/Don-t-crash-if-udev_monitor_new_from_netlink-fails.patch:
